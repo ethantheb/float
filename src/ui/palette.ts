@@ -105,7 +105,7 @@ export class Palette {
         title: el('span', 'title'),
         sep: el('span', 'sub', document.createTextNode(' — ')),
         sub: el('span', 'sub'),
-        badge: el('span', 'badge', document.createTextNode('Switch to Tab'), el('span', 'key', icon(ICONS.arrow, 'arrow'))),
+        badge: el('span', 'badge', el('span', 'label', document.createTextNode('Switch to Tab')),el('span', 'key', icon(ICONS.arrow, 'arrow'))),
       };
       row.el.dataset.i = String(i);
       row.el.hidden = true;

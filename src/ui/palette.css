@@ -172,6 +172,12 @@
   font-weight: 600;
   color: var(--c-muted);
 }
+/* Center the caps on the key, then nudge down for the ascenders (the label has no descenders). */
+.label {
+  position: relative;
+  top: 0.07em;
+  text-box: trim-both cap alphabetic;
+}
 .key {
   display: grid;
   place-items: center;

@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="color-scheme" content="dark light" />
+    <title>New Tab</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #141414;
+      }
+      @media (prefers-color-scheme: light) {
+        html:not([data-theme='dark']),
+        html:not([data-theme='dark']) body {
+          background: #ededed;
+        }
+      }
+      html[data-theme='light'],
+      html[data-theme='light'] body {
+        background: #ededed;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Parser-blocking on purpose: the palette is mounted before first paint. -->
+    <script src="palette.js"></script>
+  </body>
+</html>

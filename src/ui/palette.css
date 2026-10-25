@@ -1,0 +1,191 @@
+/* Host: fully reset so page styles can't leak in (!important beats outer styles from inside a shadow root). */
+:host {
+  all: initial !important;
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2147483647 !important;
+  display: block !important;
+  width: auto !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  overflow: visible !important;
+}
+:host([popover]:not(:popover-open)) {
+  display: none !important;
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+}
+
+.panel {
+  /* Dark defaults. --float-* are user overrides set on the host. */
+  --bg: #1c1c1c;
+  --fg: #e8e8e8;
+  --muted: #8f8f8f;
+  --border: rgba(255, 255, 255, 0.09);
+  --selected: rgba(255, 255, 255, 0.065);
+  --accent: #e8e8e8;
+  --key: #5a5a5a;
+  --shadow: rgba(0, 0, 0, 0.5);
+
+  --c-bg: var(--float-bg, var(--bg));
+  --c-fg: var(--float-fg, var(--fg));
+  --c-muted: var(--float-muted, var(--muted));
+  --c-border: var(--float-border, var(--border));
+  --c-selected: var(--float-selected, var(--selected));
+  --c-accent: var(--float-accent, var(--accent));
+
+  position: absolute;
+  left: 0;
+  right: 0;
+  /* Centered when full (60 + 1 + 16 + 8 * 48 = 461px tall), above center when shorter. */
+  top: max(16px, calc(50% - 231px));
+  width: min(720px, calc(100% - 32px));
+  margin: 0 auto;
+  box-sizing: border-box;
+  background: var(--c-bg);
+  color: var(--c-fg);
+  border: 1px solid var(--c-border);
+  border-radius: 12px;
+  box-shadow: 0 18px 50px var(--shadow), 0 2px 8px var(--shadow);
+  font: 14px/1.4 system-ui, 'Segoe UI Variable Text', 'Segoe UI', Inter, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+  cursor: default;
+}
+
+:host([data-theme='light']) .panel {
+  --bg: #fbfbfb;
+  --fg: #1d1d1f;
+  --muted: #74747a;
+  --border: rgba(0, 0, 0, 0.1);
+  --selected: rgba(0, 0, 0, 0.055);
+  --accent: #1d1d1f;
+  --key: #cfcfcf;
+  --shadow: rgba(0, 0, 0, 0.16);
+}
+@media (prefers-color-scheme: light) {
+  :host(:not([data-theme='dark'])) .panel {
+    --bg: #fbfbfb;
+    --fg: #1d1d1f;
+    --muted: #74747a;
+    --border: rgba(0, 0, 0, 0.1);
+    --selected: rgba(0, 0, 0, 0.055);
+    --accent: #1d1d1f;
+    --key: #cfcfcf;
+    --shadow: rgba(0, 0, 0, 0.16);
+  }
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 60px;
+  padding: 0 22px;
+  cursor: text;
+}
+.search {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: var(--c-muted);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.input {
+  all: unset;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  font: inherit;
+  font-size: 15px;
+  color: var(--c-fg);
+  caret-color: var(--c-accent);
+  cursor: text;
+}
+.input::placeholder {
+  color: var(--c-muted);
+}
+
+.list {
+  margin: 0 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--c-border);
+}
+.panel.empty .list {
+  display: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 48px;
+  padding: 0 12px;
+  border-radius: 7px;
+}
+.row.selected {
+  background: var(--c-selected);
+}
+[hidden] {
+  display: none !important;
+}
+
+.icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+.glyph {
+  fill: none;
+  stroke: var(--c-muted);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sub {
+  color: var(--c-muted);
+}
+
+.badge {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--c-muted);
+}
+.key {
+  display: grid;
+  place-items: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 4px;
+  background: var(--key);
+}
+.arrow {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: var(--c-bg);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

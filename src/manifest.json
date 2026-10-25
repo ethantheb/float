@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Float",
+  "version": "0.1.0",
+  "description": "A fast, minimal command palette for tabs, bookmarks, history, and the web.",
+  "minimum_chrome_version": "121",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": ["tabs", "bookmarks", "history", "storage", "scripting", "favicon", "search"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "content_scripts": [
+    { "matches": ["<all_urls>"], "js": ["content.js"], "run_at": "document_idle" }
+  ],
+  "commands": {
+    "open-palette": {
+      "suggested_key": { "default": "Alt+T" },
+      "description": "Open the command palette"
+    }
+  },
+  "chrome_url_overrides": { "newtab": "palette.html" },
+  "options_ui": { "page": "options.html", "open_in_tab": true }
+}

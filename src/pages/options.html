@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="color-scheme" content="dark light" />
+    <title>Float — Options</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Float</h1>
+
+      <section>
+        <h2>Shortcut</h2>
+        <p class="row">
+          <span>Open palette: <kbd id="shortcut">Not set</kbd></span>
+          <button type="button" id="shortcuts">Change…</button>
+        </p>
+        <p class="hint">In Helium you can bind this to Ctrl+T.</p>
+      </section>
+
+      <section>
+        <h2>Behavior</h2>
+        <label>
+          <span>Fallback URL</span>
+          <input name="fallbackUrl" placeholder="Built-in palette page" spellcheck="false" />
+        </label>
+        <p class="hint">Opened in a new tab when the palette can't appear on the current page (browser pages, the Web Store, some Google sites).</p>
+        <label>
+          <span>Focus palette on new tabs</span>
+          <input type="checkbox" name="focusNewTab" />
+        </label>
+        <p class="hint">The browser puts focus in the address bar on new tab pages. When on, the new tab page is swapped for an identical tab so you can type straight away. The address bar then shows the extension's URL.</p>
+        <label>
+          <span>Search URL</span>
+          <input name="searchUrl" placeholder="Browser default search engine" spellcheck="false" />
+        </label>
+        <p class="hint">Use <code>%s</code> for the query, e.g. <code>https://kagi.com/search?q=%s</code>.</p>
+      </section>
+
+      <section>
+        <h2>Appearance</h2>
+        <label>
+          <span>Theme</span>
+          <select name="theme">
+            <option value="auto">Follow browser</option>
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </label>
+        <div id="colors"></div>
+        <p class="hint">Any CSS color. Leave empty for the theme default.</p>
+      </section>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>

@@ -55,16 +55,16 @@ The extension ID is fixed (`ielgjbnkjikemadobenfanpmchjjokff`), so your settings
 
 ## Permissions
 
-Float makes no network requests and sends nothing anywhere. Web searches go through your browser's own search engine.
+Float makes no network requests and sends nothing anywhere. Web searches use your browser's search engine, or the search URL you set in Float's options.
 
 | Permission | Why |
 | --- | --- |
-| Read and change all your data on all websites | Shows the palette on top of the current page. |
-| `tabs` | Searches and switches between open tabs. |
+| Read and change all your data on all websites | Shows the palette on top of the current page. Float's script is loaded in every page ahead of time so the palette opens instantly; it only adds the palette and doesn't read or change the page. |
+| `tabs` | Searches open tabs by title and URL, including browser pages like `chrome://settings`. |
 | `bookmarks`, `history` | Searches your bookmarks and history. |
 | `favicon` | Shows site icons from the browser's local icon cache. |
 | `search` | Runs web searches with your default search engine. |
-| `scripting` | Adds the palette to tabs that were already open when Float was installed or updated. |
+| `scripting` | Adds the palette to tabs where it isn't running yet: pages still loading, and tabs open since before Float was installed or updated. |
 | `storage` | Saves your settings. |
 
 ## Development

@@ -1,8 +1,13 @@
 # Float
 
-A fast, minimal command palette that floats above the page. Search open tabs, bookmarks, and history, search the web, open websites, and jump to browser pages like `flags`. Inspired by the palettes in Zen and Arc.
+<img width="824" height="403" alt="image" src="https://github.com/user-attachments/assets/0a2d971d-1e63-4dc9-aa77-e3f8a22e4441" />
 
-Works in Chrome and Chromium-based browsers (version 121+). In browsers that allow it, such as [Helium](https://github.com/imputnet/helium), you can bind it to Ctrl+T.
+
+
+A fast, minimal command palette for chromium-based browsers. Search open tabs, bookmarks, history, search the web, open websites, and jump to browser pages like `flags`. Inspired by the palettes in Zen and Arc.
+
+In browsers that allow it, such as [Helium](https://github.com/imputnet/helium), you can bind it to Ctrl+T.
+
 
 ## Install
 

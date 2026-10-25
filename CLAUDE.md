@@ -17,6 +17,10 @@ Vanilla TypeScript, bundled with esbuild, no runtime dependencies. Add libraries
 - `npm run build` → `dist/` (load unpacked). `npm run watch` for development.
 - `npm run typecheck`. Run it and the build after every change.
 - `npm run icons` regenerates `src/icons/*.png` from `scripts/icons.mjs`.
+- **Releases:** `npm version <patch|minor|major>` then `git push --follow-tags`. `.github/workflows/release.yml` builds the tag, attests it, and publishes the zip.
+  - The version lives only in `package.json`; the build writes it into `dist/manifest.json`.
+  - The manifest's `key` pins the extension ID to `ielgjbnkjikemadobenfanpmchjjokff`, so settings survive reinstalls. Don't change or remove it.
+  - Keep the build reproducible: same tag gives the same `dist/` bytes on any OS. No timestamps, absolute paths, or CRLF in output.
 
 ### Architecture
 

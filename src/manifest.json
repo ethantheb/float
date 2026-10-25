@@ -1,7 +1,6 @@
 {
   "manifest_version": 3,
   "name": "Float",
-  "version": "0.1.0",
   "description": "A fast, minimal command palette for tabs, bookmarks, history, and the web.",
   "minimum_chrome_version": "121",
   "icons": {
@@ -23,5 +22,6 @@
     }
   },
   "chrome_url_overrides": { "newtab": "palette.html" },
-  "options_ui": { "page": "options.html", "open_in_tab": true }
+  "options_ui": { "page": "options.html", "open_in_tab": true },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtjYE/AsXbdi4goWBNB3GuJ0h9BZNu+zIlPQ5T2mq/fEpzv52gHW8e8+NiYR1LS5OB2LXf2IlHJ+t5dcY6bZkeO6zedrTwftpOmvmcNQj05vEmrG2ai2nW60gp/Ke9KUW87BCDznx02dG99HecPp/pSdVZ74B9qzJfxkYTkgQUKoSbOpbV9gEkHGF8GOxMyZJBAXLQY4CZn6FCgZAhTySonyhRrXBX0SlO3cutFGJeOOaeMe/3z2GeiTDhFYhcxbUfsBbQs9O0NPttfvv7iUF3I8zk7rFNg2VSS+gsixuzfvOBvhBZp5pzhPfpAtrbPYsH2YWxlJ7gEuFUtcFwsuDZwIDAQAB"
 }

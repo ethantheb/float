@@ -1,12 +1,11 @@
 import * as esbuild from 'esbuild';
-import { copyFile, mkdir, rm, stat, watch as fsWatch } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, rm, stat, watch as fsWatch, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const watch = process.argv.includes('--watch');
 const OUT = 'dist';
 // [source under src/, destination under dist/]
 const STATIC = [
-  ['manifest.json', 'manifest.json'],
   ['pages/palette.html', 'palette.html'],
   ['pages/options.html', 'options.html'],
   ['pages/options.css', 'options.css'],
@@ -37,8 +36,21 @@ const configs = [
   },
 ];
 
+// package.json is the single source of the version (bump with `npm version`).
+async function writeManifest() {
+  const [manifest, pkg] = await Promise.all(
+    ['src/manifest.json', 'package.json'].map(async (f) => JSON.parse(await readFile(f, 'utf8'))),
+  );
+  const { manifest_version, name, ...rest } = manifest;
+  const out = { manifest_version, name, version: pkg.version, ...rest };
+  await writeFile(join(OUT, 'manifest.json'), JSON.stringify(out, null, 2) + '\n');
+}
+
 async function copyStatic() {
-  await Promise.all(STATIC.map(([from, to]) => copyFile(join('src', from), join(OUT, to))));
+  await Promise.all([
+    writeManifest(),
+    ...STATIC.map(([from, to]) => copyFile(join('src', from), join(OUT, to))),
+  ]);
 }
 
 async function report() {

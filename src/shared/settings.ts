@@ -13,6 +13,9 @@ export interface Settings {
   colors: Partial<Record<ColorKey, string>>;
 }
 
+/** localStorage key mirroring settings, so extension pages apply the theme before first paint. */
+export const SETTINGS_CACHE = 'float-settings';
+
 export const DEFAULTS: Settings = { fallbackUrl: '', searchUrl: '', focusNewTab: true, theme: 'auto', colors: {} };
 
 export async function loadSettings(): Promise<Settings> {

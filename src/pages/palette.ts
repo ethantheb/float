@@ -1,10 +1,7 @@
 import type { Message } from '../shared/messages';
-import { DEFAULTS, applyAppearance, loadSettings, onSettingsChanged, type Settings } from '../shared/settings';
+import { DEFAULTS, SETTINGS_CACHE, applyAppearance, loadSettings, onSettingsChanged, type Settings } from '../shared/settings';
 import { createHost } from '../ui/host';
 import { Palette } from '../ui/palette';
-
-// Settings mirrored in localStorage so custom colors apply synchronously, before first paint.
-const CACHE_KEY = 'float-settings';
 
 const { host, root } = createHost('open');
 const palette = new Palette(root, {
@@ -27,7 +24,7 @@ function apply(s: Settings): void {
 
 let cached: Settings = DEFAULTS;
 try {
-  const stored = localStorage.getItem(CACHE_KEY);
+  const stored = localStorage.getItem(SETTINGS_CACHE);
   if (stored) apply((cached = { ...DEFAULTS, ...JSON.parse(stored) }));
 } catch {
   // Ignore a corrupt cache; fresh settings follow.
@@ -56,7 +53,7 @@ if (!location.search && cached.focusNewTab) void replaceNewTab().catch(() => {})
 function refresh(): void {
   void loadSettings().then((s) => {
     apply(s);
-    localStorage.setItem(CACHE_KEY, JSON.stringify(s));
+    localStorage.setItem(SETTINGS_CACHE, JSON.stringify(s));
   });
 }
 refresh();

@@ -1,4 +1,7 @@
+/* Follows Float's theme setting (data-theme on <html>), like the palette, so a change is visible here. */
 :root {
+  /* Native controls (the select's dropdown list, checkboxes, scrollbars) follow the theme too. */
+  color-scheme: dark;
   --bg: #141414;
   --panel: #1c1c1c;
   --fg: #e8e8e8;
@@ -6,8 +9,18 @@
   --border: rgba(255, 255, 255, 0.09);
   --field: rgba(255, 255, 255, 0.05);
 }
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #ededed;
+  --panel: #fbfbfb;
+  --fg: #1d1d1f;
+  --muted: #74747a;
+  --border: rgba(0, 0, 0, 0.1);
+  --field: rgba(0, 0, 0, 0.04);
+}
 @media (prefers-color-scheme: light) {
-  :root {
+  :root:not([data-theme='dark']) {
+    color-scheme: light;
     --bg: #ededed;
     --panel: #fbfbfb;
     --fg: #1d1d1f;
@@ -65,6 +78,10 @@ button {
   border: 1px solid var(--border);
   border-radius: 7px;
   padding: 6px 10px;
+}
+option {
+  background: var(--panel);
+  color: var(--fg);
 }
 input {
   width: 260px;

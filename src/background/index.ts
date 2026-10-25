@@ -1,7 +1,7 @@
 import type { Message, QueryResponse, Result, Where } from '../shared/messages';
 import { DEFAULTS, loadSettings, onSettingsChanged, type Settings } from '../shared/settings';
 import { syncHistory } from './history';
-import { search, searchOlder } from './search';
+import { recent, search, searchOlder } from './search';
 import { toUrl } from './url';
 
 const PALETTE_URL = chrome.runtime.getURL('palette.html');
@@ -18,23 +18,35 @@ onSettingsChanged(() => {
 chrome.commands.onCommand.addListener((command, tab) => {
   if (command === 'open-palette') void showPalette(tab);
 });
+// Tests call this from the worker: puppeteer can't press browser shortcuts.
+Object.assign(globalThis, { showPalette });
 
 async function showPalette(tab?: chrome.tabs.Tab): Promise<void> {
   tab ??= (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0];
   const tabId = tab?.id;
   if (tabId == null) return openFallback(tab);
   const url = tab.url || tab.pendingUrl || '';
+  const ownPage = url.startsWith(PALETTE_URL) || url.startsWith('chrome://newtab');
+  if (!ownPage && RESTRICTED.test(url)) return openFallback(tab);
+
+  // Sent along so the palette renders them before it becomes visible.
+  const results = await recent(tabId);
+  // Catch up history while the user starts typing (queued behind the message).
+  const catchUp = () => void syncHistory().catch(() => {});
 
   // Our own new tab / fallback page: just refocus its palette.
-  if (url.startsWith(PALETTE_URL) || url.startsWith('chrome://newtab')) {
-    const focused = await chrome.runtime.sendMessage<Message>({ type: 'focus', tabId }).catch(() => false);
-    if (focused) return;
+  if (ownPage) {
+    const focused = chrome.runtime.sendMessage<Message>({ type: 'focus', tabId, results }).catch(() => false);
+    catchUp();
+    if (await focused) return;
+    if (RESTRICTED.test(url)) return openFallback(tab);
   }
-  if (RESTRICTED.test(url)) return openFallback(tab);
 
-  const toggle: Message = { type: 'toggle' };
+  const toggle: Message = { type: 'toggle', results };
   try {
-    await chrome.tabs.sendMessage(tabId, toggle, { frameId: 0 });
+    const sent = chrome.tabs.sendMessage(tabId, toggle, { frameId: 0 });
+    if (!ownPage) catchUp();
+    await sent;
   } catch {
     // No content script yet (tab loaded before install/reload): inject and retry.
     try {

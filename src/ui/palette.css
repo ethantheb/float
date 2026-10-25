@@ -123,6 +123,9 @@
 .panel.empty .list {
   display: none;
 }
+.panel.pending {
+  opacity: 0;
+}
 
 .row {
   display: flex;

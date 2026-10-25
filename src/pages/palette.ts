@@ -14,7 +14,7 @@ const palette = new Palette(root, {
     void chrome.runtime
       .sendMessage<Message, boolean>({ type: 'close' })
       .catch(() => false)
-      .then((closed) => closed || palette.reset());
+      .then((closed) => closed || palette.open());
   },
 });
 document.body.append(host);
@@ -69,6 +69,6 @@ let tabId: number | undefined;
 void chrome.tabs.getCurrent().then((t) => (tabId = t?.id));
 chrome.runtime.onMessage.addListener((msg: Message, _sender, sendResponse) => {
   if (msg.type !== 'focus' || msg.tabId !== tabId) return;
-  palette.open();
+  palette.open(msg.results);
   sendResponse(true);
 });

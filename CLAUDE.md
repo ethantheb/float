@@ -41,10 +41,10 @@ Vanilla TypeScript, bundled with esbuild, no runtime dependencies. Add libraries
 ### Rules learned the hard way
 
 - **The content script runs in every tab.**
-  - Keep it tiny: currently ~10 KB, budget 15 KB.
-  - No work until idle or opened.
+  - Keep it tiny: currently ~11 KB, budget 15 KB.
+  - No work until idle or opened. It builds the palette on idle, then lays it out once unpainted on a later idle (`warm`), so the first open skips font setup.
   - No caches.
-- **Never load extension URLs from page context.** Some sites (e.g. YouTube) block them. Favicons are fetched by the service worker, sent as base64, and drawn on `<canvas>`.
+- **Never load extension URLs from page context.** Some sites (e.g. YouTube) block them. Favicons are fetched and decoded by the service worker, sent as base64 RGBA, and drawn synchronously with `putImageData` (decoding in the page is async and slow the first time).
 - **No `innerHTML` in shared UI** (Trusted Types). Use constructed stylesheets (page CSP), and stop the overlay's events from reaching the page.
 - **Don't add service worker listeners that fire on routine browsing** (`history.onVisited`, `tabs.onUpdated`, …). They wake the worker on every navigation. Catch up lazily when the palette opens instead.
 - **Memory must stay bounded.**
@@ -52,6 +52,7 @@ Vanilla TypeScript, bundled with esbuild, no runtime dependencies. Add libraries
   - Favicon cache: 300 entries.
   - Everything lives in service worker memory, which is freed when the worker goes idle.
 - **`chrome.history.search` scans all history** (tens of ms or more). It's only used in the separate `older` request, whose results are appended below the shown ones.
+- **The palette is complete in its first visible frame.** The `toggle`/`focus` messages carry the empty-query results; the overlay renders them and shows in one task. Nothing async between showing and painting. The palette page stays transparent (`.pending`) until its first results render.
 - **Rows never reorder after they're shown, and Enter acts on what's visible.** An Enter pressed before results arrive waits for them.
 - **Palette page URLs:**
   - Bare `palette.html` means it's the browser's new tab page. It's swapped for `palette.html?tab`, because browsers force address-bar focus on new tab pages; setting `focusNewTab`.
@@ -60,6 +61,7 @@ Vanilla TypeScript, bundled with esbuild, no runtime dependencies. Add libraries
 ### Testing
 
 - Drive Helium (`%LOCALAPPDATA%\imput\Helium\Application\chrome.exe`) with `puppeteer-core`, using a throwaway `userDataDir` and `--load-extension=<dist>`. Never use the user's real profile.
-- Puppeteer keys can't trigger browser shortcuts. Open the palette by sending `{type:'toggle'}` via `chrome.tabs.sendMessage` from the service worker. Open new tabs via `chrome.tabs.create({})`.
+- Puppeteer keys can't trigger browser shortcuts. Open the palette by evaluating `showPalette()` in the service worker (exposed on `globalThis` for this). Open new tabs via `chrome.tabs.create({})`.
+- Measure on a throttled CPU (`Emulation.setCPUThrottlingRate`, 4x) to see what weak machines see.
 - In tests, open the palette page as `palette.html?fallback`. A bare URL gets swapped away.
 - On Windows, `chrome.exe --version` opens a window in the running browser. Read the version from the install directory instead.

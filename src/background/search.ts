@@ -90,6 +90,11 @@ async function withIcons(results: Result[]): Promise<Result[]> {
   return results;
 }
 
+/** Results for an empty query: the most recently used tabs. */
+export async function recent(excludeTabId?: number): Promise<Result[]> {
+  return withIcons(await recentTabs(excludeTabId));
+}
+
 export async function search(text: string, settings: Settings, excludeTabId?: number): Promise<{ results: Result[]; more: boolean }> {
   const { results, more } = await rank(text, settings, excludeTabId);
   return { results: await withIcons(results), more };

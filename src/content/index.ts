@@ -1,4 +1,4 @@
-import type { Message } from '../shared/messages';
+import type { Message, Result } from '../shared/messages';
 import { applyAppearance, loadSettings, onSettingsChanged } from '../shared/settings';
 import { createHost } from '../ui/host';
 import { Palette } from '../ui/palette';
@@ -40,13 +40,14 @@ function deepActiveElement(): HTMLElement | null {
   return a as HTMLElement | null;
 }
 
-function show(): void {
+function show(results: Result[]): void {
   build();
   if (!host!.isConnected) document.documentElement.append(host!);
   previousFocus = deepActiveElement();
   open = true;
+  // One task: results render and the panel shows in the same frame.
   host!.showPopover();
-  palette!.open();
+  palette!.open(results);
 }
 
 function hide(restoreFocus: boolean): void {
@@ -62,7 +63,7 @@ function hide(restoreFocus: boolean): void {
 const onMessage = (msg: Message, _sender: chrome.runtime.MessageSender, sendResponse: (r: boolean) => void) => {
   if (msg.type !== 'toggle') return;
   if (open) hide(true);
-  else show();
+  else show(msg.results);
   sendResponse(true);
 };
 chrome.runtime.onMessage.addListener(onMessage);
@@ -84,5 +85,20 @@ document.addEventListener(
   { once: true },
 );
 
-// Build the hidden palette while the page is idle so opening is just a visibility toggle.
-requestIdleCallback(build, { timeout: 3000 });
+/** Lays the palette out once, unpainted (show, layout, hide in one task), to set up fonts ahead of the first open. */
+function warm(): void {
+  if (!host?.isConnected || open) return;
+  host.showPopover();
+  palette!.warm();
+  host.hidePopover();
+}
+
+// Build the hidden palette while the page is idle so opening is just a visibility toggle,
+// then warm it up only when the page is idle again (no timeout: an open does this anyway).
+requestIdleCallback(
+  () => {
+    build();
+    requestIdleCallback(warm);
+  },
+  { timeout: 3000 },
+);

@@ -1,4 +1,4 @@
-import type { Message, QueryResponse, Result, Where } from '../shared/messages';
+import { ICON_PX, type Message, type QueryResponse, type Result, type Where } from '../shared/messages';
 
 const MAX_ROWS = 8;
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -32,15 +32,14 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, ...child
   return e;
 }
 
-const ICON_PX = 32;
-
-/**
- * Decodes without loading any URL, so page CSP and origin checks don't apply.
- * Not cached: this runs in every tab, and redrawing only happens when a row's icon changes.
- */
-function decodeIcon(base64: string): Promise<ImageBitmap> {
-  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-  return createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+/** Native where available (Chrome 140+): a JS loop over 4 KB per icon is slow before it's optimized. */
+function fromBase64(s: string): Uint8Array<ArrayBuffer> {
+  const native = (Uint8Array as { fromBase64?: (s: string) => Uint8Array<ArrayBuffer> }).fromBase64;
+  if (native) return native.call(Uint8Array, s);
+  const bin = atob(s);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
 }
 
 function send<T>(msg: Message): Promise<T | undefined> {
@@ -56,7 +55,7 @@ interface Row {
   el: HTMLElement;
   favicon: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
-  /** Icon currently drawn (or being drawn) on `favicon`. */
+  /** Icon currently drawn on `favicon`. */
   icon: string | undefined;
   search: SVGSVGElement;
   gear: SVGSVGElement;
@@ -105,7 +104,7 @@ export class Palette {
         title: el('span', 'title'),
         sep: el('span', 'sub', document.createTextNode(' — ')),
         sub: el('span', 'sub'),
-        badge: el('span', 'badge', el('span', 'label', document.createTextNode('Switch to Tab')),el('span', 'key', icon(ICONS.arrow, 'arrow'))),
+        badge: el('span', 'badge', el('span', 'label', document.createTextNode('Switch to Tab')), el('span', 'key', icon(ICONS.arrow, 'arrow'))),
       };
       row.el.dataset.i = String(i);
       row.el.hidden = true;
@@ -115,6 +114,12 @@ export class Palette {
     }
 
     this.panel = el('div', 'panel empty', el('label', 'bar', icon(ICONS.search, 'search'), this.input), list);
+    if (opts.page) {
+      // A page loads before its results arrive: stay invisible until they render, rather
+      // than showing a bare bar that then grows (the overlay gets results before it shows).
+      this.panel.classList.add('pending');
+      setTimeout(() => this.panel.classList.remove('pending'), 150);
+    }
     parent.appendChild(this.panel);
 
     this.input.addEventListener('input', () => this.query(this.input.value));
@@ -132,17 +137,37 @@ export class Palette {
     });
   }
 
-  /** Focuses the input and refreshes results for an empty query. */
-  open(): void {
-    this.input.focus({ preventScroll: true });
+  /**
+   * Clears the input and focuses it. Renders `results` (the empty-query results sent
+   * with the shortcut) synchronously, so they're in the first visible frame, or asks for them.
+   */
+  open(results?: Result[]): void {
     this.reset();
+    if (results) this.show(this.sent, results);
+    else this.query('');
+    this.input.focus({ preventScroll: true });
   }
 
-  /** Clears the input and preloads empty-query results for the next open. */
+  /**
+   * Lays out every part of the palette once, so the first open doesn't pay for font
+   * setup and text shaping (tens of ms on slow machines). The caller makes it renderable
+   * around this call, in the same task, so nothing is painted.
+   */
+  warm(): void {
+    const empty = this.panel.classList.contains('empty');
+    const hidden = this.rows.map((r) => r.el.hidden);
+    this.panel.classList.remove('empty');
+    for (const r of this.rows) r.el.hidden = false;
+    void this.panel.offsetHeight;
+    this.panel.classList.toggle('empty', empty);
+    this.rows.forEach((r, i) => (r.el.hidden = hidden[i]));
+  }
+
+  /** Clears the input and drops any results still in flight. */
   reset(): void {
     this.input.value = '';
     this.pendingEnter = null;
-    this.query('');
+    this.sent++;
   }
 
   private rowIndex(e: Event): number {
@@ -154,16 +179,20 @@ export class Palette {
     const id = ++this.sent;
     void send<QueryResponse>({ type: 'query', id, text }).then((res) => {
       if (!res || id !== this.sent) return;
-      this.shown = id;
-      this.results = res.results;
-      this.selected = 0;
-      this.render();
+      this.show(id, res.results);
       if (this.pendingEnter !== null) {
         const alt = this.pendingEnter;
         this.pendingEnter = null;
         this.activate(0, alt);
       } else if (res.more) this.queryOlder(id, text);
     });
+  }
+
+  private show(id: number, results: Result[]): void {
+    this.shown = id;
+    this.results = results;
+    this.selected = 0;
+    this.render();
   }
 
   /** Appends older history below the shown results, so nothing already visible moves. */
@@ -178,6 +207,7 @@ export class Palette {
 
   private render(): void {
     this.panel.classList.toggle('empty', this.results.length === 0);
+    this.panel.classList.remove('pending');
     this.rows.forEach((row, i) => {
       const r = this.results[i];
       row.el.hidden = !r;
@@ -195,21 +225,12 @@ export class Palette {
     });
   }
 
+  /** Synchronous, so a row and its icon always appear in the same frame. */
   private drawIcon(row: Row, icon: string | undefined): void {
     if (row.icon === icon) return;
     row.icon = icon;
-    row.ctx.clearRect(0, 0, ICON_PX, ICON_PX);
-    if (!icon) return;
-    decodeIcon(icon)
-      .then((bitmap) => {
-        // The row may have moved on to another result meanwhile.
-        if (row.icon === icon) {
-          row.ctx.clearRect(0, 0, ICON_PX, ICON_PX);
-          row.ctx.drawImage(bitmap, 0, 0, ICON_PX, ICON_PX);
-        }
-        bitmap.close();
-      })
-      .catch(() => {});
+    if (!icon) return row.ctx.clearRect(0, 0, ICON_PX, ICON_PX);
+    row.ctx.putImageData(new ImageData(new Uint8ClampedArray(fromBase64(icon).buffer), ICON_PX, ICON_PX), 0, 0);
   }
 
   private select(i: number): void {

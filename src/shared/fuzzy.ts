@@ -1,3 +1,5 @@
+export const normalize = (text: string) => text.trim().toLowerCase().replace(/\s+/g, ' ');
+
 const isWordChar = (c: number) => (c >= 97 && c <= 122) || (c >= 48 && c <= 57) || c > 127;
 
 /**

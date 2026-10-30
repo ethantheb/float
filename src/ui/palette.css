@@ -22,7 +22,9 @@
   inset: 0;
 }
 
-.panel {
+/* Colors, shared with the welcome box. */
+.panel,
+.welcome {
   /* Dark defaults. --float-* are user overrides set on the host. */
   --bg: #1c1c1c;
   --fg: #e8e8e8;
@@ -39,7 +41,9 @@
   --c-border: var(--float-border, var(--border));
   --c-selected: var(--float-selected, var(--selected));
   --c-accent: var(--float-accent, var(--accent));
+}
 
+.panel {
   position: absolute;
   left: 0;
   right: 0;
@@ -60,7 +64,7 @@
   cursor: default;
 }
 
-:host([data-theme='light']) .panel {
+:host([data-theme='light']) :is(.panel, .welcome) {
   --bg: #fbfbfb;
   --fg: #1d1d1f;
   --muted: #74747a;
@@ -71,7 +75,7 @@
   --shadow: rgba(0, 0, 0, 0.16);
 }
 @media (prefers-color-scheme: light) {
-  :host(:not([data-theme='dark'])) .panel {
+  :host(:not([data-theme='dark'])) :is(.panel, .welcome) {
     --bg: #fbfbfb;
     --fg: #1d1d1f;
     --muted: #74747a;
@@ -119,6 +123,11 @@
   margin: 0 10px;
   padding: 8px 0;
   border-top: 1px solid var(--c-border);
+  /* Options mode can list more than 8 rows. */
+  max-height: calc(8 * 48px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--c-border) transparent;
 }
 .panel.empty .list {
   display: none;
@@ -137,6 +146,9 @@
 }
 .row.selected {
   background: var(--c-selected);
+}
+.row.disabled .text {
+  color: var(--c-muted);
 }
 [hidden] {
   display: none !important;
@@ -197,4 +209,92 @@
   stroke-width: 2.5;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+/* Options mode */
+.chip {
+  flex: none;
+  max-width: 40%;
+  padding: 4px 9px;
+  margin-right: -4px;
+  border-radius: 6px;
+  background: var(--c-selected);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: relative;
+  cursor: pointer;
+}
+/* Hovered is soft red x to escape */
+.chip:hover {
+  color: transparent;
+  background: rgba(229, 83, 75, 0.14);
+}
+.chip:hover::after {
+  content: '\00d7';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #e5534b;
+  font-size: 18px;
+  font-weight: 400;
+}
+.value {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 45%;
+  color: var(--c-muted);
+}
+.vtext {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.row.selected .value.choice::before {
+  content: '‹';
+}
+.row.selected .value.choice::after {
+  content: '›';
+}
+.swatch {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+  border: 1px solid var(--c-border);
+}
+.picker {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+.picker::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.picker::-webkit-color-swatch {
+  border: none;
+  border-radius: 5px;
+}
+.foot {
+  margin: 0 10px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--c-border);
+  color: var(--c-muted);
+  font-size: 12.5px;
+  /* Fixed height, so rows don't move as the help changes. */
+  height: 2.8em;
+  overflow: hidden;
+}
+.panel.empty .foot {
+  display: none;
 }

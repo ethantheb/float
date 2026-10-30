@@ -6,6 +6,9 @@ export interface Settings {
   fallbackUrl: string;
   /** Search URL template with `%s`. Empty = the browser's default search engine. */
   searchUrl: string;
+  /** What new tabs show; 'url' opens `newTabUrl`. */
+  newTab: 'float' | 'browser' | 'url';
+  newTabUrl: string;
   /** Swap the browser's new tab page for a tab of our own so the palette gets focus, not the address bar. */
   focusNewTab: boolean;
   theme: 'auto' | 'dark' | 'light';
@@ -16,7 +19,7 @@ export interface Settings {
 /** localStorage key mirroring settings, so extension pages apply the theme before first paint. */
 export const SETTINGS_CACHE = 'float-settings';
 
-export const DEFAULTS: Settings = { fallbackUrl: '', searchUrl: '', focusNewTab: true, theme: 'auto', colors: {} };
+export const DEFAULTS: Settings = { fallbackUrl: '', searchUrl: '', newTab: 'float', newTabUrl: '', focusNewTab: true, theme: 'auto', colors: {} };
 
 export async function loadSettings(): Promise<Settings> {
   return (await chrome.storage.sync.get(DEFAULTS)) as Settings;

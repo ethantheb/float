@@ -4,7 +4,7 @@
 
 
 
-A fast, minimal command palette for chromium-based browsers. Search open tabs, bookmarks, history, search the web, open websites, and jump to browser pages like `flags`. Inspired by the palettes in Zen and Arc.
+A fast, minimal command palette for chromium-based browsers. Search open tabs, bookmarks, history, the web, and jump to browser pages like `flags`. Inspired by the palettes in Zen and Arc.
 
 In browsers that allow it, such as [Helium](https://github.com/imputnet/helium), you can bind it to Ctrl+T.
 
@@ -34,7 +34,11 @@ Then load the `dist/` folder as in step 4 above.
 
 ### Set the shortcut
 
-The default shortcut is Alt+T. To change it, open Float's options and click **Change…**, or go to `chrome://extensions/shortcuts`.
+The default shortcut is Alt+T. To change it, go to `chrome://extensions/shortcuts`, or search the palette for **Float options** and pick **Shortcut**.
+
+All of Float's settings live inside the palette: search for **Float options** on any page. Esc goes back up a level.
+
+> To get to options, type `Float options`
 
 ## Verify a release
 

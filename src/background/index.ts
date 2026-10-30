@@ -1,8 +1,10 @@
 import type { Message, QueryResponse, Result, Where } from '../shared/messages';
-import { DEFAULTS, loadSettings, onSettingsChanged, type Settings } from '../shared/settings';
+import { DEFAULTS, loadSettings, onSettingsChanged, saveSettings, type Settings } from '../shared/settings';
+import { OPEN_PALETTE } from '../shared/shortcut';
 import { syncHistory } from './history';
+import { applySetting, optionRows } from './options';
 import { recent, search, searchOlder } from './search';
-import { toUrl } from './url';
+import { isOwnPage, toUrl } from './url';
 
 const PALETTE_URL = chrome.runtime.getURL('palette.html');
 /** Pages where extensions can't run content scripts. */
@@ -16,7 +18,10 @@ onSettingsChanged(() => {
 });
 
 chrome.commands.onCommand.addListener((command, tab) => {
-  if (command === 'open-palette') void showPalette(tab);
+  if (command === OPEN_PALETTE) void showPalette(tab);
+});
+chrome.runtime.onInstalled.addListener(({ reason }) => {
+  if (reason === 'install') void chrome.tabs.create({ url: 'options.html?welcome' });
 });
 // Tests call this from the worker: puppeteer can't press browser shortcuts.
 Object.assign(globalThis, { showPalette });
@@ -26,7 +31,7 @@ async function showPalette(tab?: chrome.tabs.Tab): Promise<void> {
   const tabId = tab?.id;
   if (tabId == null) return openFallback(tab);
   const url = tab.url || tab.pendingUrl || '';
-  const ownPage = url.startsWith(PALETTE_URL) || url.startsWith('chrome://newtab');
+  const ownPage = isOwnPage(url) || url.startsWith('chrome://newtab');
   if (!ownPage && RESTRICTED.test(url)) return openFallback(tab);
 
   // Sent along so the palette renders them before it becomes visible.
@@ -65,6 +70,18 @@ async function openFallback(tab?: chrome.tabs.Tab): Promise<void> {
 }
 
 chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
+  if (msg.type === 'query' && msg.options) {
+    getSettings()
+      .then((s) => optionRows(msg.text, s, msg.menu))
+      .then((results) => sendResponse({ id: msg.id, results } satisfies QueryResponse))
+      .catch(() => sendResponse({ id: msg.id, results: [] } satisfies QueryResponse));
+    return true;
+  }
+  if (msg.type === 'set') {
+    // Serialized so rapid changes build on each other.
+    saving = saving.then(() => set(msg.key, msg.step, msg.value)).then(sendResponse, () => sendResponse(false));
+    return true;
+  }
   if (msg.type === 'query') {
     // An empty query means the palette just opened: catch up history while the user starts typing.
     if (!msg.text.trim()) void syncHistory().catch(() => {});
@@ -90,6 +107,16 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
   }
   return false;
 });
+
+let saving: Promise<unknown> = Promise.resolve();
+
+async function set(key: string, step?: number, value?: string): Promise<boolean> {
+  const next = applySetting(await getSettings(), key, step, value);
+  // Cached only once saved: sync storage writes can fail (quotas).
+  await saveSettings(next);
+  settings = Promise.resolve(next);
+  return true;
+}
 
 /** Closes a palette page and returns to the tab used before it. Keeps a window's last tab open. */
 async function closePalettePage(tab?: chrome.tabs.Tab): Promise<boolean> {

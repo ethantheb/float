@@ -8,6 +8,7 @@ Float is a Chrome MV3 extension that adds a command palette floating above the p
 - Float is minimal, simple, and beautiful. Matte finish, rounded corners, nice typography.
 - Float searches open tabs, bookmarks, and history, searches the web, opens websites, and opens chrome pages like `flags`.
 - Float follows the browser's light/dark mode (Chrome has no theme-color API); users can override colors in options.
+- Settings live inside the palette: searching **Float options** enters options mode (in the overlay too). Esc goes up one level.
 - Where the overlay can't run (browser pages, Web Store, some Google sites), Float opens a user-configurable fallback URL (default: its own palette page).
 
 ### Stack & commands
@@ -27,6 +28,7 @@ Vanilla TypeScript, bundled with esbuild, no runtime dependencies. Add libraries
 - `src/background/`: service worker.
   - `index.ts`: shortcut command, fallback, message router, actions.
   - `search.ts`: ranking.
+  - `options.ts`: the settings rows and changes for the palette's options mode.
   - `history.ts`: in-memory history index.
   - `favicons.ts`
   - `chromePages.ts`
@@ -34,14 +36,15 @@ Vanilla TypeScript, bundled with esbuild, no runtime dependencies. Add libraries
 - `src/content/index.ts`: the in-page overlay. A closed shadow root on a `popover="manual"` host (top layer), prebuilt while the page is idle.
 - `src/ui/`: the palette view (`palette.ts`, `palette.css`), shared by the overlay and the palette page.
 - `src/pages/`:
-  - `palette.*`: the new tab override and fallback page.
-  - `options.*`
+  - `palette.*`: the new tab override and fallback page. `options.html` is the same page opened in options mode.
+  - `welcome.*`: the first-run box above the options palette (`options.html?welcome`, opened on install).
 - `src/shared/`: message types, settings (`chrome.storage.sync`), fuzzy scorer.
 
 ### Rules learned the hard way
 
 - **The content script runs in every tab.**
-  - Keep it tiny: currently ~11 KB, budget 15 KB.
+  - Keep it tiny: currently ~15 KB, budget 15 KB. The budget is deliberate pressure to keep code minimal; don't raise it casually. The build minifies `palette.css`, which ships inside it.
+  - When a palette feature no longer fits, split options mode out of `content.js` and inject it on demand (`chrome.scripting`) instead of raising the budget.
   - No work until idle or opened. It builds the palette on idle, then lays it out once unpainted on a later idle (`warm`), so the first open skips font setup.
   - No caches.
 - **Never load extension URLs from page context.** Some sites (e.g. YouTube) block them. Favicons are fetched and decoded by the service worker, sent as base64 RGBA, and drawn synchronously with `putImageData` (decoding in the page is async and slow the first time).

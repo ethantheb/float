@@ -1,4 +1,4 @@
-import { displayUrl } from './url';
+import { displayUrl, isOwnPage } from './url';
 
 /** Hard cap on indexed URLs; the least recently visited are evicted first. */
 export const MAX_HISTORY = 5000;
@@ -63,7 +63,7 @@ async function sync(): Promise<Map<string, HistoryEntry>> {
   // Results are newest first; insert oldest first so recency order is kept.
   for (let i = items.length - 1; i >= 0; i--) {
     const { url, title = '', visitCount = 0, typedCount = 0 } = items[i];
-    if (!url) continue;
+    if (!url || isOwnPage(url)) continue;
     map.delete(url);
     map.set(url, { url, title, visits: visitCount, typed: typedCount, t: title.toLowerCase(), d: displayUrl(url).toLowerCase() });
   }

@@ -1,0 +1,111 @@
+/* Colors come from palette.css (same shadow root). */
+.welcome {
+  position: absolute;
+  left: 0;
+  right: 0;
+  /* Just above the palette. */
+  top: calc(var(--palette-top) - var(--welcome-h) - 12px);
+  width: min(720px, calc(100% - 32px));
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: 18px 22px;
+  background: var(--c-bg);
+  color: var(--c-fg);
+  border: 1px solid var(--c-border);
+  border-radius: 12px;
+  font: 14px/1.5 system-ui, 'Segoe UI Variable Text', 'Segoe UI', Inter, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+:host(.welcoming) {
+  /* The usual top, or lower to fit the box; vh because .list uses it too. */
+  --palette-top: max(calc(28px + var(--welcome-h)), calc(50vh - 231px));
+}
+:host(.welcoming) .panel {
+  top: var(--palette-top);
+}
+/* Short windows scroll the list; 152px is the bar, footer, and padding. */
+:host(.welcoming) .list {
+  max-height: clamp(96px, calc(100vh - var(--palette-top) - 152px), calc(8 * 48px));
+}
+
+.welcome h1 {
+  margin: 0 40px 10px 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.welcome p {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 8px 0;
+}
+.welcome p:last-of-type {
+  margin-bottom: 0;
+}
+.welcome p > span {
+  flex: 1;
+}
+.welcome .down {
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  vertical-align: -2px;
+  fill: none;
+  stroke: var(--c-muted);
+  stroke-width: 2.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.welcome .muted {
+  color: var(--c-muted);
+}
+.welcome kbd {
+  font: 600 12.5px system-ui, 'Segoe UI', sans-serif;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: var(--c-selected);
+  border: 1px solid var(--c-border);
+}
+.welcome strong {
+  font-weight: 600;
+}
+.welcome button {
+  flex: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--c-fg);
+  background: var(--c-selected);
+  border: 1px solid var(--c-border);
+  border-radius: 7px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+.welcome button:hover {
+  border-color: var(--c-muted);
+}
+.welcome .close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: rgba(229, 83, 75, 0.12);
+}
+.welcome .close:hover {
+  background: rgba(229, 83, 75, 0.22);
+}
+.welcome .cross {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: #e5534b;
+  stroke-width: 2.25;
+  stroke-linecap: round;
+}

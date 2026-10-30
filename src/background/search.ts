@@ -1,12 +1,14 @@
-import { score } from '../shared/fuzzy';
+import { normalize, score } from '../shared/fuzzy';
 import type { Result, ResultKind } from '../shared/messages';
 import type { Settings } from '../shared/settings';
 import { CHROME_PAGES } from './chromePages';
 import { favicon } from './favicons';
 import { getHistory } from './history';
-import { displayUrl, hostOf, toUrl } from './url';
+import { displayUrl, hostOf, isOwnPage, toUrl } from './url';
 
 const MAX_RESULTS = 8;
+const OPTIONS_KEY = 'float:options';
+const OPTIONS_NAMES = ['float options', 'float settings', 'settings', 'preferences', 'options'];
 
 interface Candidate {
   result: Result;
@@ -38,7 +40,7 @@ async function getBookmarks(): Promise<Bookmark[]> {
   const out: Bookmark[] = [];
   const walk = (nodes: chrome.bookmarks.BookmarkTreeNode[]) => {
     for (const n of nodes) {
-      if (n.url) out.push({ title: n.title, url: n.url, t: n.title.toLowerCase(), d: displayUrl(n.url).toLowerCase() });
+      if (n.url && !isOwnPage(n.url)) out.push({ title: n.title, url: n.url, t: n.title.toLowerCase(), d: displayUrl(n.url).toLowerCase() });
       if (n.children) walk(n.children);
     }
   };
@@ -79,12 +81,10 @@ function actionRow(q: string, settings: Settings): Result {
   return { kind: 'search', title: q, sub, url: q };
 }
 
-const normalize = (text: string) => text.trim().toLowerCase().replace(/\s+/g, ' ');
-
 async function withIcons(results: Result[]): Promise<Result[]> {
   await Promise.all(
     results.map(async (r) => {
-      if (r.kind !== 'search' && r.kind !== 'chrome') r.icon = await favicon(r.url);
+      if (r.kind !== 'search' && r.kind !== 'chrome' && r.kind !== 'options') r.icon = await favicon(r.url);
     }),
   );
   return results;
@@ -111,7 +111,7 @@ export async function searchOlder(text: string, exclude: string[]): Promise<Resu
   if (!q || slots <= 0) return [];
   const shown = new Set(exclude);
   const found = (await chrome.history.search({ text: q, startTime: 0, maxResults: 20 }))
-    .filter((h): h is chrome.history.HistoryItem & { url: string } => !!h.url && !shown.has(h.url))
+    .filter((h): h is chrome.history.HistoryItem & { url: string } => !!h.url && !shown.has(h.url) && !isOwnPage(h.url))
     .map((h) => ({ h, s: Math.max(score(q, (h.title ?? '').toLowerCase()), score(q, displayUrl(h.url).toLowerCase())) }))
     .sort((a, b) => b.s - a.s)
     .slice(0, slots);
@@ -155,6 +155,15 @@ async function rank(text: string, settings: Settings, excludeTabId?: number): Pr
     add(url, name, url, 1.05, () => ({ kind: 'chrome', title: name, sub: url, url }), { promotable: false });
     const c = byUrl.get(url);
     if (c && (name === page || explicit)) c.promote = true;
+  }
+
+  // Just below the best matching chrome page, so `settings` finds chrome://settings first.
+  const options = Math.max(...OPTIONS_NAMES.map((n) => score(q, n)));
+  if (options) {
+    let best = 0;
+    for (const name of CHROME_PAGES) best = Math.max(best, byUrl.get(`chrome://${name}`)?.score ?? 0);
+    const result: Result = { kind: 'options', title: 'Float options', sub: 'Settings', url: '' };
+    byUrl.set(OPTIONS_KEY, { result, score: best ? Math.min(options, best - 0.001) : options, promote: false });
   }
 
   for (const b of bookmarks) add(b.url, b.t, b.d, 1.05, () => pageResult('bookmark', b.title, b.url));

@@ -118,10 +118,29 @@
   padding: 8px 0;
   border-top: 1px solid var(--c-border);
   /* Options mode can list more than 8 rows. */
-  max-height: calc(8 * 48px);
+  max-height: calc(var(--rows, 8) * 48px);
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--c-border) transparent;
+  /* Fades the edge with more rows past it; inactive when nothing scrolls. */
+  mask-image: linear-gradient(transparent, #000 var(--fade-top, 0px), #000 calc(100% - var(--fade-bottom, 0px)), transparent);
+  animation: list-fade linear;
+  animation-timeline: scroll(self);
+  /* Keeps the selected row out of the fade. */
+  scroll-padding-block: 24px;
+}
+/* Steps at halfway: @property (for a smooth fade) doesn't apply in shadow roots. */
+@keyframes list-fade {
+  from {
+    --fade-bottom: 24px;
+  }
+  to {
+    --fade-top: 24px;
+  }
+}
+/* Options mode (the footer shows): half a row peeks out when there are more. */
+.panel:has(> .foot:not([hidden])) {
+  --rows: 7.5;
 }
 .panel.empty .list {
   display: none;

@@ -29,7 +29,7 @@
 }
 /* Short windows scroll the list; 152px is the bar, footer, and padding. */
 :host(.welcoming) .list {
-  max-height: clamp(96px, calc(100cqh - var(--palette-top) - 152px), calc(8 * 48px));
+  max-height: clamp(96px, calc(100cqh - var(--palette-top) - 152px), calc(var(--rows, 8) * 48px));
 }
 
 .welcome h1 {

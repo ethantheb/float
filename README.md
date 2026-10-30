@@ -37,14 +37,15 @@ npm run build
 
 Then load the `dist/` folder as in step 4 above.
 
-### Configuration
+---
+#### Configuration
 
 The default shortcut is Alt+T. To change it, go to `chrome://extensions/shortcuts`.
 
 Float options live in the palette. Simply search for "Float options".
 
 ---
-### Permissions
+#### Permissions
 
 Float makes no network requests and sends nothing anywhere. Web searches use your browser's search engine, or the search URL you set in Float's options.
 
@@ -57,3 +58,9 @@ Float makes no network requests and sends nothing anywhere. Web searches use you
 | `search` | Runs web searches with your default search engine. |
 | `scripting` | Adds the palette to tabs where it isn't running yet: pages still loading, and tabs open since before Float was installed or updated. |
 | `storage` | Saves your settings, and a local copy of the bang list (sourced from Helium browser). |
+
+---
+#### AI Acknowledgement
+
+Float is developed with substantial help from AI models, as I'm not a web developer and this started
+as a personal experiment. I do still direct changes and test extensively.

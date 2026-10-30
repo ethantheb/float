@@ -20,6 +20,8 @@ let host: HTMLElement | undefined;
 let palette: Palette | undefined;
 let previousFocus: HTMLElement | null = null;
 let open = false;
+/** Opened by the edit-URL shortcut. */
+let editing = false;
 /** `devicePixelRatio` at 100% zoom, from the zoom sent at open. */
 let screenDpr = 1;
 
@@ -47,12 +49,15 @@ function deepActiveElement(): HTMLElement | null {
 function show({ results, zoom, edit }: Toggle): void {
   build();
   if (!host!.isConnected) document.documentElement.append(host!);
-  previousFocus = deepActiveElement();
+  // Switching modes while open keeps the focus saved at the first open (now it's the palette's).
+  const wasOpen = open;
+  if (!wasOpen) previousFocus = deepActiveElement();
   open = true;
+  editing = !!edit;
   screenDpr = devicePixelRatio / zoom;
   unzoom(host!, screenDpr);
   // One task: results render and the panel shows in the same frame.
-  host!.showPopover();
+  if (!wasOpen) host!.showPopover();
   palette!.open(results, edit);
 }
 
@@ -68,7 +73,8 @@ function hide(restoreFocus: boolean): void {
 
 const onMessage = (msg: Message, _sender: chrome.runtime.MessageSender, sendResponse: (r: boolean) => void) => {
   if (msg.type !== 'toggle') return;
-  if (open) hide(true);
+  // The same shortcut closes the palette; the other one switches it to that mode.
+  if (open && editing === !!msg.edit) hide(true);
   else show(msg);
   sendResponse(true);
 };

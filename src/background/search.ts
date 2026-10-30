@@ -1,5 +1,5 @@
 import { normalize, score } from '../shared/fuzzy';
-import type { Result, ResultKind } from '../shared/messages';
+import type { QueryResponse, Result, ResultKind } from '../shared/messages';
 import type { Settings } from '../shared/settings';
 import { findBang, type BangMatch } from './bangs';
 import { CHROME_PAGES } from './chromePages';
@@ -105,9 +105,9 @@ export async function recent(excludeTabId?: number): Promise<Result[]> {
   return withIcons(await recentTabs(excludeTabId));
 }
 
-export async function search(text: string, settings: Settings, excludeTabId?: number): Promise<{ results: Result[]; more: boolean }> {
-  const { results, more } = await rank(text, settings, excludeTabId);
-  return { results: await withIcons(results), more };
+export async function search(text: string, settings: Settings, excludeTabId?: number): Promise<Omit<QueryResponse, 'id'>> {
+  const ranked = await rank(text, settings, excludeTabId);
+  return { ...ranked, results: await withIcons(ranked.results) };
 }
 
 /**
@@ -128,7 +128,7 @@ export async function searchOlder(text: string, exclude: string[]): Promise<Resu
   return withIcons(found.map(({ h }) => pageResult('history', h.title ?? '', h.url)));
 }
 
-async function rank(text: string, settings: Settings, excludeTabId?: number): Promise<{ results: Result[]; more: boolean }> {
+async function rank(text: string, settings: Settings, excludeTabId?: number): Promise<Omit<QueryResponse, 'id'>> {
   const q = normalize(text);
   if (!q) return { results: await recentTabs(excludeTabId), more: false };
 
@@ -138,6 +138,8 @@ async function rank(text: string, settings: Settings, excludeTabId?: number): Pr
     getHistory(),
     settings.bangs ? findBang(text).catch(() => null) : null,
   ]);
+  // A leading bang is a mode (the palette shows it as a chip): its search is the only row.
+  if (bang?.leading) return { results: [bangRow(bang, text.trim())], bang: { trigger: bang.trigger, name: bang.name } };
 
   // Keyed by URL so each page appears once; earlier (higher-priority) kinds win.
   // Results are only built for matches: history alone is thousands of entries per keystroke.

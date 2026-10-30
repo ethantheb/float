@@ -69,4 +69,11 @@ export interface QueryResponse {
   results: Result[];
   /** Few matches: worth asking for history older than the index (an `older` message). */
   more?: boolean;
+  /** The query starts with this bang: the palette shows it as a chip once a space follows. */
+  bang?: Bang;
+}
+
+export interface Bang {
+  trigger: string;
+  name: string;
 }

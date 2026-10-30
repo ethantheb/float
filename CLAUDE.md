@@ -45,7 +45,7 @@ Vanilla TypeScript, bundled with esbuild, no runtime dependencies. Add libraries
 ### Rules learned the hard way
 
 - **The content script runs in every tab.**
-  - Keep it tiny: currently ~15 KB, budget 15 KB. The budget is deliberate pressure to keep code minimal; don't raise it casually. The build minifies `palette.css`, which ships inside it.
+  - Keep it tiny: currently ~15.3 KB, budget 16 KB. The budget is deliberate pressure to keep code minimal; don't raise it casually. The build minifies `palette.css`, which ships inside it.
   - When a palette feature no longer fits, split options mode out of `content.js` and inject it on demand (`chrome.scripting`) instead of raising the budget.
   - No work until idle or opened. It builds the palette on idle, then lays it out once unpainted on a later idle (`warm`), so the first open skips font setup.
   - No caches.

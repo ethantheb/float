@@ -16,6 +16,9 @@ type Bang = [name: string, template: string];
 
 export interface BangMatch {
   name: string;
+  trigger: string;
+  /** The bang is the first word. */
+  leading: boolean;
   /** The query without the bang. */
   terms: string;
   url: string;
@@ -73,7 +76,7 @@ export async function findBang(text: string): Promise<BangMatch | null> {
     if (!bang) continue;
     const terms = words.filter((_, j) => j !== i).join(' ');
     const url = bangUrl(bang[1], terms);
-    if (url) return { name: bang[0], terms, url };
+    if (url) return { name: bang[0], trigger: keys[n].slice(PREFIX.length), leading: i === 0, terms, url };
   }
   return null;
 }

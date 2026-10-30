@@ -87,7 +87,7 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
     if (!msg.text.trim()) void syncHistory().catch(() => {});
     getSettings()
       .then((s) => search(msg.text, s, sender.tab?.id))
-      .then(({ results, more }) => sendResponse({ id: msg.id, results, more } satisfies QueryResponse))
+      .then((res) => sendResponse({ id: msg.id, ...res } satisfies QueryResponse))
       .catch(() => sendResponse({ id: msg.id, results: [] } satisfies QueryResponse));
     return true;
   }

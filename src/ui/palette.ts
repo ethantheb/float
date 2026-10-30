@@ -1,4 +1,4 @@
-import { ICON_PX, type Message, type QueryResponse, type Result, type SettingEdit, type Where } from '../shared/messages';
+import { ICON_PX, type Bang, type Message, type QueryResponse, type Result, type SettingEdit, type Where } from '../shared/messages';
 
 const MAX_ROWS = 8;
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -106,6 +106,8 @@ export class Palette {
   /** The setting being edited, and the filter to restore after. */
   #editing: SettingEdit | null = null;
   #filter = '';
+  /** The bang in the chip; queries carry it. */
+  #bang: Bang | null = null;
 
   constructor(parent: Node, opts: PaletteOptions) {
     this.#opts = opts;
@@ -238,6 +240,7 @@ export class Palette {
     this.#input.value = '';
     this.#pendingEnter = null;
     this.#sent++;
+    this.#setBang(null);
     if (this.#options) this.#setMode(false);
   }
 
@@ -253,7 +256,14 @@ export class Palette {
   }
 
   #updateChip(): void {
-    this.#chip.textContent = this.#editing?.label ?? this.#menu?.label ?? 'Float options';
+    this.#chip.textContent = this.#editing?.label ?? this.#menu?.label ?? this.#bang?.name ?? 'Float options';
+  }
+
+  #setBang(bang: Bang | null): void {
+    this.#bang = bang;
+    this.#updateChip();
+    this.#chip.hidden = !bang;
+    this.#input.placeholder = bang ? `Search ${bang.name}...` : 'Search...';
   }
 
   /** Lists the current level unfiltered, selecting the setting `select`. */
@@ -271,12 +281,16 @@ export class Palette {
   /** Esc or the chip: stop editing, go up a level, or close. */
   #escape(): void {
     if (this.#editing) this.#finishEdit(false);
-    else if (this.#options) this.#back();
+    else if (this.#options || this.#bang) this.#back();
     else this.#opts.onClose(true);
   }
 
-  /** Up a level, reselecting the submenu just left. */
+  /** Up a level, reselecting the submenu just left. Leaving a bang keeps its terms as a search. */
   #back(): void {
+    if (this.#bang) {
+      this.#setBang(null);
+      return this.#query(this.#input.value);
+    }
     const key = this.#menu?.key;
     if (key) {
       this.#menu = null;
@@ -369,9 +383,15 @@ export class Palette {
     const id = ++this.#sent;
     const msg: Message = this.#options
       ? { type: 'query', id, text, options: true, menu: this.#menu?.key }
-      : { type: 'query', id, text };
+      : { type: 'query', id, text: this.#bang ? `!${this.#bang.trigger} ${text}` : text };
     void send<QueryResponse>(msg).then((res) => {
       if (!res || id !== this.#sent) return;
+      // A leading bang moves into the chip once a space follows it.
+      const lead = this.#input.value.match(/^\s*!(\S+)\s/);
+      if (res.bang && !this.#bang && lead?.[1].toLowerCase() === res.bang.trigger) {
+        this.#input.value = this.#input.value.slice(lead[0].length);
+        this.#setBang(res.bang);
+      }
       this.#show(id, res.results, keep);
       if (select) this.#select(Math.max(0, res.results.findIndex((r) => r.setting?.key === select)));
       if (this.#pendingEnter !== null) {
@@ -466,31 +486,46 @@ export class Palette {
 
   #onKey(e: KeyboardEvent): void {
     if (e.isComposing) return;
-    if (this.#editing) {
-      const n = this.#results.length;
-      if (e.key === 'Enter') this.#badColor() || this.#finishEdit(true);
-      else if (e.key === 'Escape') this.#finishEdit(false);
-      // ↑/↓ move between colors, editing each.
-      else if (this.#editing.color && (e.key === 'ArrowDown' || e.key === 'ArrowUp'))
-        this.#switchEdit((this.#selected + (e.key === 'ArrowDown' ? 1 : -1) + n) % n);
-      else if (e.key !== 'Tab') return; // Tab would move focus out of the palette.
-      e.preventDefault();
-      return;
-    }
-    const ctrl = e.ctrlKey && !e.altKey && !e.metaKey;
+    if (this.#editing) return this.#onEditKey(e);
+
     const k = e.key;
-    if (k === 'ArrowDown' || (k === 'Tab' && !e.shiftKey) || (ctrl && (k === 'n' || k === 'j'))) this.#move(1);
-    else if (k === 'ArrowUp' || (k === 'Tab' && e.shiftKey) || (ctrl && (k === 'p' || k === 'k'))) this.#move(-1);
+    const ctrl = e.ctrlKey && !e.altKey && !e.metaKey;
+    const down = k === 'ArrowDown' || (k === 'Tab' && !e.shiftKey) || (ctrl && (k === 'n' || k === 'j'));
+    const up = k === 'ArrowUp' || (k === 'Tab' && e.shiftKey) || (ctrl && (k === 'p' || k === 'k'));
+    const atStart = this.#input.selectionEnd === 0;
+    const deleteChip = k === 'Backspace' && atStart && (this.#options || !!this.#bang);
+    const setting = this.#results[this.#selected]?.setting;
+    const choice = (k === 'ArrowLeft' || k === 'ArrowRight') && setting?.control === 'choice' ? setting : null;
+
+    if (down) this.#move(1);
+    else if (up) this.#move(-1);
     else if (k === 'Enter') {
       // Results for what was typed haven't arrived yet: act once they do.
       if (this.#shown !== this.#sent) this.#pendingEnter = e.shiftKey;
       else this.#activate(this.#selected, e.shiftKey);
     } else if (k === 'Escape') this.#escape();
-    // No key repeat: Backspace would leave options mode, and each step is a quota-limited write.
-    else if (k === 'Backspace' && this.#options && !this.#input.value) e.repeat || this.#back();
-    else if ((k === 'ArrowLeft' || k === 'ArrowRight') && this.#results[this.#selected]?.setting?.control === 'choice')
-      e.repeat || this.#set(this.#results[this.#selected].setting!.key, k === 'ArrowLeft' ? -1 : 1);
-    else return;
+    // Held keys don't repeat these: Backspace would leave the mode, and each step is a quota-limited write.
+    else if (deleteChip) {
+      if (!e.repeat) this.#back();
+    } else if (choice) {
+      if (!e.repeat) this.#set(choice.key, k === 'ArrowLeft' ? -1 : 1);
+    } else return;
+    e.preventDefault();
+  }
+
+  /** Keys while editing a setting's text. */
+  #onEditKey(e: KeyboardEvent): void {
+    const k = e.key;
+    if (k === 'Enter') {
+      // An invalid color keeps editing, so it can be fixed.
+      if (!this.#badColor()) this.#finishEdit(true);
+    } else if (k === 'Escape') this.#finishEdit(false);
+    else if (this.#editing!.color && (k === 'ArrowDown' || k === 'ArrowUp')) {
+      // ↑/↓ move between colors, editing each.
+      const n = this.#results.length;
+      const by = k === 'ArrowDown' ? 1 : -1;
+      this.#switchEdit((this.#selected + by + n) % n);
+    } else if (k !== 'Tab') return; // Tab would move focus out of the palette.
     e.preventDefault();
   }
 
@@ -505,9 +540,14 @@ export class Palette {
     const s = result.setting;
     if (s?.control === 'menu') return this.#openMenu(s.key, s.label ?? result.title);
     if (s?.disabled) return;
-    if (s && s.control !== 'link') return s.edit ? this.#startEdit(s.edit) : this.#set(s.key, alt ? -1 : 1);
+    if (s && s.control !== 'link') {
+      if (s.edit) this.#startEdit(s.edit);
+      else this.#set(s.key, alt ? -1 : 1);
+      return;
+    }
     // Setting links open in a new tab.
-    const where: Where = s || this.#opts.page === alt ? 'new' : 'current';
+    const newTab = !!s || this.#opts.page === alt;
+    const where: Where = newTab ? 'new' : 'current';
     void send({ type: 'open', result, where });
     if (!this.#opts.page) this.#opts.onClose(true);
   }

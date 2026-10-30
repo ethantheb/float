@@ -8,6 +8,7 @@ Float is a Chrome MV3 extension that adds a command palette floating above the p
 - Float is minimal, simple, and beautiful. Matte finish, rounded corners, nice typography.
 - Float searches open tabs, bookmarks, and history, searches the web, opens websites, and opens chrome pages like `flags`.
 - Float follows the browser's light/dark mode (Chrome has no theme-color API); users can override colors in options.
+- A second shortcut (`open-palette-url`) opens the palette on the current URL; Enter then changes the current page instead of opening a tab.
 - Settings live inside the palette: searching **Float options** enters options mode (in the overlay too). Esc goes up one level.
 - Where the overlay can't run (browser pages, Web Store, some Google sites), Float opens a user-configurable fallback URL (default: its own palette page).
 

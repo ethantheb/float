@@ -1,4 +1,4 @@
-import type { Message, Result } from '../shared/messages';
+import type { Message } from '../shared/messages';
 import { applyAppearance, loadSettings, onSettingsChanged } from '../shared/settings';
 import { createHost, unzoom } from '../ui/host';
 import { Palette } from '../ui/palette';
@@ -13,6 +13,8 @@ const ISOLATED = [
   'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'dblclick', 'contextmenu',
 ];
 const stop = (e: Event) => e.stopPropagation();
+
+type Toggle = Extract<Message, { type: 'toggle' }>;
 
 let host: HTMLElement | undefined;
 let palette: Palette | undefined;
@@ -42,7 +44,7 @@ function deepActiveElement(): HTMLElement | null {
   return a as HTMLElement | null;
 }
 
-function show(results: Result[], zoom: number): void {
+function show({ results, zoom, edit }: Toggle): void {
   build();
   if (!host!.isConnected) document.documentElement.append(host!);
   previousFocus = deepActiveElement();
@@ -51,7 +53,7 @@ function show(results: Result[], zoom: number): void {
   unzoom(host!, screenDpr);
   // One task: results render and the panel shows in the same frame.
   host!.showPopover();
-  palette!.open(results);
+  palette!.open(results, edit);
 }
 
 function hide(restoreFocus: boolean): void {
@@ -67,7 +69,7 @@ function hide(restoreFocus: boolean): void {
 const onMessage = (msg: Message, _sender: chrome.runtime.MessageSender, sendResponse: (r: boolean) => void) => {
   if (msg.type !== 'toggle') return;
   if (open) hide(true);
-  else show(msg.results, msg.zoom);
+  else show(msg);
   sendResponse(true);
 };
 chrome.runtime.onMessage.addListener(onMessage);

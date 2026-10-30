@@ -108,6 +108,8 @@ export class Palette {
   #filter = '';
   /** The bang in the chip; queries carry it. */
   #bang: Bang | null = null;
+  /** Opened to edit the page's URL: Enter changes this page instead of opening a tab. */
+  #replace = false;
 
   constructor(parent: Node, opts: PaletteOptions) {
     this.#opts = opts;
@@ -205,12 +207,18 @@ export class Palette {
   /**
    * Clears the input and focuses it. Renders `results` (the empty-query results sent
    * with the shortcut) synchronously, so they're in the first visible frame, or asks for them.
+   * `editUrl` starts with that URL selected, and Enter then changes the page.
    */
-  open(results?: Result[]): void {
+  open(results?: Result[], editUrl?: string): void {
     this.reset();
+    if (editUrl) {
+      this.#replace = true;
+      this.#input.value = editUrl;
+    }
     if (results) this.#show(this.#sent, results);
-    else this.#query('');
+    else this.#query(this.#input.value);
     this.#input.focus({ preventScroll: true });
+    this.#input.select();
   }
 
   /**
@@ -240,6 +248,7 @@ export class Palette {
     this.#input.value = '';
     this.#pendingEnter = null;
     this.#sent++;
+    this.#replace = false;
     this.#setBang(null);
     if (this.#options) this.#setMode(false);
   }
@@ -383,7 +392,7 @@ export class Palette {
     const id = ++this.#sent;
     const msg: Message = this.#options
       ? { type: 'query', id, text, options: true, menu: this.#menu?.key }
-      : { type: 'query', id, text: this.#bang ? `!${this.#bang.trigger} ${text}` : text };
+      : { type: 'query', id, text: this.#bang ? `!${this.#bang.trigger} ${text}` : text, replace: this.#replace };
     void send<QueryResponse>(msg).then((res) => {
       if (!res || id !== this.#sent) return;
       // A leading bang moves into the chip once a space follows it.
@@ -529,7 +538,7 @@ export class Palette {
     e.preventDefault();
   }
 
-  /** `alt` (Shift) flips the default: new tab from the overlay, current tab from the palette page. */
+  /** `alt` (Shift) flips the default: new tab from the overlay, this tab from the palette page or when editing the URL. */
   #activate(i: number, alt: boolean): void {
     const result = this.#results[i];
     if (!result) return;
@@ -545,8 +554,9 @@ export class Palette {
       else this.#set(s.key, alt ? -1 : 1);
       return;
     }
-    // Setting links open in a new tab.
-    const newTab = !!s || this.#opts.page === alt;
+    const stayByDefault = this.#opts.page || this.#replace;
+    // Setting links always open in a new tab.
+    const newTab = !!s || stayByDefault === alt;
     const where: Where = newTab ? 'new' : 'current';
     void send({ type: 'open', result, where });
     if (!this.#opts.page) this.#opts.onClose(true);

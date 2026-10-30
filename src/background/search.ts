@@ -105,8 +105,9 @@ export async function recent(excludeTabId?: number): Promise<Result[]> {
   return withIcons(await recentTabs(excludeTabId));
 }
 
-export async function search(text: string, settings: Settings, excludeTabId?: number): Promise<Omit<QueryResponse, 'id'>> {
-  const ranked = await rank(text, settings, excludeTabId);
+/** `withTabs: false` leaves open tabs out, for editing the page's URL: Enter changes the page there. */
+export async function search(text: string, settings: Settings, excludeTabId?: number, withTabs = true): Promise<Omit<QueryResponse, 'id'>> {
+  const ranked = await rank(text, settings, excludeTabId, withTabs);
   return { ...ranked, results: await withIcons(ranked.results) };
 }
 
@@ -128,12 +129,12 @@ export async function searchOlder(text: string, exclude: string[]): Promise<Resu
   return withIcons(found.map(({ h }) => pageResult('history', h.title ?? '', h.url)));
 }
 
-async function rank(text: string, settings: Settings, excludeTabId?: number): Promise<Omit<QueryResponse, 'id'>> {
+async function rank(text: string, settings: Settings, excludeTabId?: number, withTabs = true): Promise<Omit<QueryResponse, 'id'>> {
   const q = normalize(text);
-  if (!q) return { results: await recentTabs(excludeTabId), more: false };
+  if (!q) return { results: withTabs ? await recentTabs(excludeTabId) : [], more: false };
 
   const [tabs, bookmarks, history, bang] = await Promise.all([
-    chrome.tabs.query({}),
+    withTabs ? chrome.tabs.query({}) : [],
     getBookmarks(),
     getHistory(),
     settings.bangs ? findBang(text).catch(() => null) : null,

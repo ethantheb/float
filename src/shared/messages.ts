@@ -53,15 +53,17 @@ export interface Result {
 export type Where = 'new' | 'current';
 
 export type Message =
-  // palette -> SW, answered with QueryResponse; `options` lists settings (or `menu`'s) instead
-  | { type: 'query'; id: number; text: string; options?: boolean; menu?: string }
+  // palette -> SW, answered with QueryResponse; `options` lists settings (or `menu`'s) instead,
+  // `replace` (editing the page's URL) leaves out open tabs
+  | { type: 'query'; id: number; text: string; options?: boolean; menu?: string; replace?: boolean }
   | { type: 'older'; id: number; text: string; exclude: string[] } // palette -> SW, answered with QueryResponse
   | { type: 'open'; result: Result; where: Where } // palette -> SW
   | { type: 'set'; key: string; step?: number; value?: string } // palette -> SW, answered once saved
   | { type: 'close' } // palette page -> SW, answered with whether the tab was closed
   // SW -> content script / palette page (answered with true). Carry the empty-query
   // results so the palette is complete in its first visible frame.
-  | { type: 'toggle'; results: Result[]; zoom: number }
+  // `edit`: the page's URL, to edit; Enter then changes the page.
+  | { type: 'toggle'; results: Result[]; zoom: number; edit?: string }
   | { type: 'focus'; tabId: number; results: Result[] };
 
 export interface QueryResponse {

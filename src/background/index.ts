@@ -1,6 +1,6 @@
 import type { Message, QueryResponse, Result, Where } from '../shared/messages';
 import { DEFAULTS, loadSettings, onSettingsChanged, saveSettings, type Settings } from '../shared/settings';
-import { OPEN_PALETTE } from '../shared/shortcut';
+import { EDIT_URL, OPEN_PALETTE } from '../shared/shortcut';
 import { syncHistory } from './history';
 import { applySetting, optionRows } from './options';
 import { recent, search, searchOlder } from './search';
@@ -19,6 +19,7 @@ onSettingsChanged(() => {
 
 chrome.commands.onCommand.addListener((command, tab) => {
   if (command === OPEN_PALETTE) void showPalette(tab);
+  if (command === EDIT_URL) void showPalette(tab, true);
 });
 chrome.runtime.onInstalled.addListener(({ reason }) => {
   if (reason === 'install') void chrome.tabs.create({ url: 'options.html?welcome' });
@@ -26,16 +27,19 @@ chrome.runtime.onInstalled.addListener(({ reason }) => {
 // Tests call this from the worker: puppeteer can't press browser shortcuts.
 Object.assign(globalThis, { showPalette });
 
-async function showPalette(tab?: chrome.tabs.Tab): Promise<void> {
+/** `editUrl`: open on this page's URL, so Enter changes the page. Our own pages just open the palette. */
+async function showPalette(tab?: chrome.tabs.Tab, editUrl = false): Promise<void> {
   tab ??= (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0];
   const tabId = tab?.id;
   if (tabId == null) return openFallback(tab);
   const url = tab.url || tab.pendingUrl || '';
   const ownPage = isOwnPage(url) || url.startsWith('chrome://newtab');
   if (!ownPage && RESTRICTED.test(url)) return openFallback(tab);
+  const edit = editUrl && !ownPage ? url : undefined;
 
   // Sent along so the palette renders them before it becomes visible.
-  const [results, zoom] = await Promise.all([recent(tabId), chrome.tabs.getZoom(tabId).catch(() => 1)]);
+  const firstResults = edit ? getSettings().then((s) => search(edit, s, tabId, false)).then((r) => r.results) : recent(tabId);
+  const [results, zoom] = await Promise.all([firstResults, chrome.tabs.getZoom(tabId).catch(() => 1)]);
   // Catch up history while the user starts typing (queued behind the message).
   const catchUp = () => void syncHistory().catch(() => {});
 
@@ -47,7 +51,7 @@ async function showPalette(tab?: chrome.tabs.Tab): Promise<void> {
     if (RESTRICTED.test(url)) return openFallback(tab);
   }
 
-  const toggle: Message = { type: 'toggle', results, zoom };
+  const toggle: Message = { type: 'toggle', results, zoom, edit };
   try {
     const sent = chrome.tabs.sendMessage(tabId, toggle, { frameId: 0 });
     if (!ownPage) catchUp();
@@ -86,7 +90,7 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
     // An empty query means the palette just opened: catch up history while the user starts typing.
     if (!msg.text.trim()) void syncHistory().catch(() => {});
     getSettings()
-      .then((s) => search(msg.text, s, sender.tab?.id))
+      .then((s) => search(msg.text, s, sender.tab?.id, !msg.replace))
       .then((res) => sendResponse({ id: msg.id, ...res } satisfies QueryResponse))
       .catch(() => sendResponse({ id: msg.id, results: [] } satisfies QueryResponse));
     return true;

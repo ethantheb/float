@@ -1,7 +1,7 @@
 import { normalize, score } from '../shared/fuzzy';
 import type { Result, Setting } from '../shared/messages';
 import { COLOR_KEYS, type ColorKey, type Settings } from '../shared/settings';
-import { SHORTCUTS_URL, currentShortcut } from '../shared/shortcut';
+import { EDIT_URL, SHORTCUTS_URL, currentShortcut } from '../shared/shortcut';
 import { displayUrl, hostOf } from './url';
 
 type Choices<T extends string> = readonly (readonly [T, string])[];
@@ -47,7 +47,7 @@ function colorRows(s: Settings) {
 
 /** The settings rows (or a submenu's), in fixed order, filtered by `text`. */
 export async function optionRows(text: string, s: Settings, menu?: string): Promise<Result[]> {
-  const shortcut = await currentShortcut();
+  const [shortcut, editShortcut] = await Promise.all([currentShortcut(), currentShortcut(EDIT_URL)]);
   const custom = COLOR_KEYS.filter((k) => s.colors[k]).length;
   const rows = menu === 'colors' ? colorRows(s) : [
     row('Shortcut', 'keyboard key binding hotkey ctrl', {
@@ -55,6 +55,12 @@ export async function optionRows(text: string, s: Settings, menu?: string): Prom
       control: 'link',
       value: shortcut || 'Not set',
       help: "Opens Float over the current page. Enter opens the browser's shortcut settings. In supported browsers you can bind it to Ctrl+T.",
+    }, SHORTCUTS_URL),
+    row('Edit URL shortcut', 'keyboard key binding hotkey address location ctrl+l', {
+      key: 'editShortcut',
+      control: 'link',
+      value: editShortcut || 'Not set',
+      help: "Opens Float on the current page's URL, to change the page in place. Enter opens the browser's shortcut settings.",
     }, SHORTCUTS_URL),
     row('Theme', 'dark light mode appearance', {
       key: 'theme',

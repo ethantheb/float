@@ -6,7 +6,7 @@ A fast, minimal command palette for chromium-based browsers, inspired by Arc and
 
 Currently supports:
 - Web search
-- Search open tabs
+- Search bookmarks, history, and open tabs
 - Helium-style bangs
 - Edit current URL
 
@@ -37,9 +37,11 @@ npm run build
 
 Then load the `dist/` folder as in step 4 above.
 
-### Set the shortcut
+### Configuration
 
-The default shortcut is Alt+T. To change it, go to `chrome://extensions/shortcuts`, or search the palette for **Float options** and pick **Shortcut**.
+The default shortcut is Alt+T. To change it, go to `chrome://extensions/shortcuts`.
+
+Float options live in the palette. Simply search for "Float options".
 
 ---
 ### Permissions

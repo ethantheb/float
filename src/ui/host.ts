@@ -16,3 +16,8 @@ export function createHost(mode: ShadowRootMode): { host: HTMLElement; root: Sha
   }
   return { host, root };
 }
+
+/** Undoes the browser's zoom, given `devicePixelRatio` at 100%, so the palette stays one size. */
+export function unzoom(host: HTMLElement, screenDpr: number): void {
+  host.style.setProperty('--float-zoom', String(screenDpr / devicePixelRatio));
+}

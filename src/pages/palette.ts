@@ -1,9 +1,12 @@
 import { toUrl } from '../background/url';
 import type { Message } from '../shared/messages';
 import { DEFAULTS, SETTINGS_CACHE, applyAppearance, loadSettings, onSettingsChanged, type Settings } from '../shared/settings';
-import { createHost } from '../ui/host';
+import { createHost, unzoom } from '../ui/host';
 import { Palette } from '../ui/palette';
 import { showWelcome } from './welcome';
+
+/** localStorage key for `devicePixelRatio` at 100% zoom. */
+const SCREEN_DPR = 'float-screen-dpr';
 
 /** The browser's own new tab page; `chrome://newtab` loads this one. */
 const BROWSER_NEW_TAB = 'chrome://new-tab-page/';
@@ -77,6 +80,11 @@ function mount(): void {
   });
   document.body.append(host);
 
+  // Cached so the first frame is the right size; corrected by the tab's zoom below.
+  let screenDpr = Number(localStorage.getItem(SCREEN_DPR)) || devicePixelRatio;
+  unzoom(host, screenDpr);
+  addEventListener('resize', () => unzoom(host, screenDpr));
+
   function apply(s: Settings): void {
     applyAppearance(host, s);
     if (s.theme === 'auto') document.documentElement.removeAttribute('data-theme');
@@ -100,7 +108,13 @@ function mount(): void {
 
   // The shortcut pressed while this page is active refocuses it instead of opening another tab.
   let tabId: number | undefined;
-  void chrome.tabs.getCurrent().then((t) => (tabId = t?.id));
+  void chrome.tabs.getCurrent().then(async (t) => {
+    tabId = t?.id;
+    if (tabId == null) return;
+    screenDpr = devicePixelRatio / (await chrome.tabs.getZoom(tabId));
+    localStorage.setItem(SCREEN_DPR, String(screenDpr));
+    unzoom(host, screenDpr);
+  });
   chrome.runtime.onMessage.addListener((msg: Message, _sender, sendResponse) => {
     if (msg.type !== 'focus' || msg.tabId !== tabId) return;
     palette.open(msg.results);

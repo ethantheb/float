@@ -1,6 +1,6 @@
 import type { Message, Result } from '../shared/messages';
 import { applyAppearance, loadSettings, onSettingsChanged } from '../shared/settings';
-import { createHost } from '../ui/host';
+import { createHost, unzoom } from '../ui/host';
 import { Palette } from '../ui/palette';
 
 // A newer copy of this script (re-injection, or the extension was reloaded) replaces older ones.
@@ -18,6 +18,8 @@ let host: HTMLElement | undefined;
 let palette: Palette | undefined;
 let previousFocus: HTMLElement | null = null;
 let open = false;
+/** `devicePixelRatio` at 100% zoom, from the zoom sent at open. */
+let screenDpr = 1;
 
 function build(): void {
   if (host) return;
@@ -40,11 +42,13 @@ function deepActiveElement(): HTMLElement | null {
   return a as HTMLElement | null;
 }
 
-function show(results: Result[]): void {
+function show(results: Result[], zoom: number): void {
   build();
   if (!host!.isConnected) document.documentElement.append(host!);
   previousFocus = deepActiveElement();
   open = true;
+  screenDpr = devicePixelRatio / zoom;
+  unzoom(host!, screenDpr);
   // One task: results render and the panel shows in the same frame.
   host!.showPopover();
   palette!.open(results);
@@ -63,10 +67,13 @@ function hide(restoreFocus: boolean): void {
 const onMessage = (msg: Message, _sender: chrome.runtime.MessageSender, sendResponse: (r: boolean) => void) => {
   if (msg.type !== 'toggle') return;
   if (open) hide(true);
-  else show(msg.results);
+  else show(msg.results, msg.zoom);
   sendResponse(true);
 };
 chrome.runtime.onMessage.addListener(onMessage);
+
+// Zooming while open resizes the viewport.
+addEventListener('resize', () => open && unzoom(host!, screenDpr));
 
 onSettingsChanged(() => void loadSettings().then((s) => host && applyAppearance(host, s)));
 

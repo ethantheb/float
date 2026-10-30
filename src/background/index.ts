@@ -35,7 +35,7 @@ async function showPalette(tab?: chrome.tabs.Tab): Promise<void> {
   if (!ownPage && RESTRICTED.test(url)) return openFallback(tab);
 
   // Sent along so the palette renders them before it becomes visible.
-  const results = await recent(tabId);
+  const [results, zoom] = await Promise.all([recent(tabId), chrome.tabs.getZoom(tabId).catch(() => 1)]);
   // Catch up history while the user starts typing (queued behind the message).
   const catchUp = () => void syncHistory().catch(() => {});
 
@@ -47,7 +47,7 @@ async function showPalette(tab?: chrome.tabs.Tab): Promise<void> {
     if (RESTRICTED.test(url)) return openFallback(tab);
   }
 
-  const toggle: Message = { type: 'toggle', results };
+  const toggle: Message = { type: 'toggle', results, zoom };
   try {
     const sent = chrome.tabs.sendMessage(tabId, toggle, { frameId: 0 });
     if (!ownPage) catchUp();

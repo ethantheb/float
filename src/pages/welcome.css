@@ -19,15 +19,17 @@
   cursor: default;
 }
 :host(.welcoming) {
-  /* The usual top, or lower to fit the box; vh because .list uses it too. */
-  --palette-top: max(calc(28px + var(--welcome-h)), calc(50vh - 231px));
+  /* cqh, not vh: viewport units ignore the zoom that keeps the palette one size. */
+  container-type: size !important;
+  /* The usual top, or lower to fit the box; cqh because .list uses it too. */
+  --palette-top: max(calc(28px + var(--welcome-h)), calc(50cqh - 231px));
 }
 :host(.welcoming) .panel {
   top: var(--palette-top);
 }
 /* Short windows scroll the list; 152px is the bar, footer, and padding. */
 :host(.welcoming) .list {
-  max-height: clamp(96px, calc(100vh - var(--palette-top) - 152px), calc(8 * 48px));
+  max-height: clamp(96px, calc(100cqh - var(--palette-top) - 152px), calc(8 * 48px));
 }
 
 .welcome h1 {

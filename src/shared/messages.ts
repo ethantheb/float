@@ -59,7 +59,7 @@ export type Message =
   | { type: 'close' } // palette page -> SW, answered with whether the tab was closed
   // SW -> content script / palette page (answered with true). Carry the empty-query
   // results so the palette is complete in its first visible frame.
-  | { type: 'toggle'; results: Result[] }
+  | { type: 'toggle'; results: Result[]; zoom: number }
   | { type: 'focus'; tabId: number; results: Result[] };
 
 export interface QueryResponse {

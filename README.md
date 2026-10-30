@@ -2,25 +2,30 @@
 
 <img width="824" height="403" alt="image" src="https://github.com/user-attachments/assets/0a2d971d-1e63-4dc9-aa77-e3f8a22e4441" />
 
+A fast, minimal command palette for chromium-based browsers, inspired by Arc and Zen.
 
-
-A fast, minimal command palette for chromium-based browsers. Search open tabs, bookmarks, history, the web, and jump to browser pages like `flags`. Inspired by the palettes in Zen and Arc.
+Currently supports:
+- Web search
+- Search open tabs
+- Helium-style bangs
+- Edit current URL
 
 In browsers that allow it, such as [Helium](https://github.com/imputnet/helium), you can bind it to Ctrl+T.
 
+---
 
-## Install
+### Install
 
-Float isn't in the Chrome Web Store yet, so you install it as an unpacked extension. Either download a release or build it yourself.
-
-### From a release
+Float isn't in the Chrome Web Store yet, so you install it as an unpacked extension.
 
 1. Download `float-vX.Y.Z.zip` from the [latest release](https://github.com/ethantheb/float/releases/latest).
 2. Optionally, [verify it](#verify-a-release).
 3. Extract it to a folder you'll keep. The browser loads the extension from that folder, so don't delete it.
 4. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and select the folder.
 
-### From source
+To update, download a new release, overwrite the old folder, and hit reload in chrome://extensions.
+
+#### From source
 
 ```sh
 git clone https://github.com/ethantheb/float.git
@@ -36,27 +41,8 @@ Then load the `dist/` folder as in step 4 above.
 
 The default shortcut is Alt+T. To change it, go to `chrome://extensions/shortcuts`, or search the palette for **Float options** and pick **Shortcut**.
 
-All of Float's settings live inside the palette: search for **Float options** on any page. Esc goes back up a level.
-
-
-## Verify a release
-
-Releases are built from the tagged commit by [GitHub Actions](.github/workflows/release.yml) and come with a signed [build attestation](https://docs.github.com/en/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds) and a `SHA256SUMS` file. The build is reproducible, so building the tag yourself produces the same files.
-
-```sh
-gh attestation verify float-vX.Y.Z.zip --repo ethantheb/float
-```
-
-## Update
-
-Unpacked extensions don't update automatically. To update:
-
-1. Extract the new release over your existing folder, or `git pull && npm ci && npm run build`.
-2. Click the reload button on Float's card in `chrome://extensions`.
-
-The extension ID is fixed (`ielgjbnkjikemadobenfanpmchjjokff`), so your settings carry over even if you move the folder.
-
-## Permissions
+---
+### Permissions
 
 Float makes no network requests and sends nothing anywhere. Web searches use your browser's search engine, or the search URL you set in Float's options.
 
@@ -68,13 +54,4 @@ Float makes no network requests and sends nothing anywhere. Web searches use you
 | `favicon` | Shows site icons from the browser's local icon cache. |
 | `search` | Runs web searches with your default search engine. |
 | `scripting` | Adds the palette to tabs where it isn't running yet: pages still loading, and tabs open since before Float was installed or updated. |
-| `storage` | Saves your settings. |
-
-## Development
-
-```sh
-npm run watch       # rebuild dist/ on change
-npm run typecheck
-```
-
-To release, run `npm version patch` (or `minor`/`major`) to bump the version and create a tag, then `git push --follow-tags`. The workflow builds and publishes the release.
+| `storage` | Saves your settings, and a local copy of the bang list (sourced from Helium browser). |

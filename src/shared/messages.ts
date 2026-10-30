@@ -40,6 +40,8 @@ export interface Result {
   sub: string;
   /** Target URL. For `search` results this is the query text. */
   url: string;
+  /** For a `search` result from a bang: the site's search URL, opened directly. */
+  target?: string;
   /** Favicon as base64 RGBA pixels (ICON_PX square), for kinds that show one. */
   icon?: string;
   tabId?: number;

@@ -29,3 +29,13 @@ export function hostOf(url: string): string {
     return url;
   }
 }
+
+/** Whether a URL is http(s), so opening it can't run script or reach a privileged page. */
+export function isWebUrl(url: string): boolean {
+  try {
+    const { protocol } = new URL(url);
+    return protocol === 'https:' || protocol === 'http:';
+  } catch {
+    return false;
+  }
+}

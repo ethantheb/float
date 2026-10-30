@@ -7,6 +7,7 @@ const OUT = 'dist';
 // [source under src/, destination under dist/]
 const STATIC = [
   ['pages/palette.html', 'palette.html'],
+  ['background/bangs.json', 'bangs.json'],
   ...[16, 32, 48, 128].map((n) => [`icons/icon${n}.png`, `icons/icon${n}.png`]),
 ];
 

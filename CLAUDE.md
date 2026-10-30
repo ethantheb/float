@@ -18,6 +18,7 @@ Vanilla TypeScript, bundled with esbuild, no runtime dependencies. Add libraries
 - `npm run build` → `dist/` (load unpacked). `npm run watch` for development.
 - `npm run typecheck`. Run it and the build after every change.
 - `npm run icons` regenerates `src/icons/*.png` from `scripts/icons.mjs`.
+- `npm run bangs` refreshes `src/background/bangs.json` from Helium's list. Review the diff before committing; it ships as-is.
 - **Releases:** `npm version <patch|minor|major>` then `git push --follow-tags`. `.github/workflows/release.yml` builds the tag, attests it, and publishes the zip.
   - The version lives only in `package.json`; the build writes it into `dist/manifest.json`.
   - The manifest's `key` pins the extension ID to `ielgjbnkjikemadobenfanpmchjjokff`, so settings survive reinstalls. Don't change or remove it.
@@ -30,6 +31,7 @@ Vanilla TypeScript, bundled with esbuild, no runtime dependencies. Add libraries
   - `search.ts`: ranking.
   - `options.ts`: the settings rows and changes for the palette's options mode.
   - `history.ts`: in-memory history index.
+  - `bangs.ts`: `!bangs`. The bundled `bangs.json` (Helium's list) is copied into `chrome.storage.local` on install/update, one key per trigger.
   - `favicons.ts`
   - `chromePages.ts`
   - `url.ts`

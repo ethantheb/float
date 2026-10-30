@@ -96,6 +96,12 @@ export async function optionRows(text: string, s: Settings, menu?: string): Prom
       help: "Where web searches go. Use %s for the query. Leave empty for the browser's default search engine.",
       edit: { key: 'searchUrl', label: 'Search URL', raw: s.searchUrl, placeholder: 'https://kagi.com/search?q=%s' },
     }),
+    row('Bangs', 'bang ! shortcut keyword helium duckduckgo kagi', {
+      key: 'bangs',
+      control: 'toggle',
+      value: s.bangs ? 'On' : 'Off',
+      help: "Start or end a search with a bang to search that site directly, e.g. !yt lofi or rust !g. Uses Helium's bang list, bundled with Float.",
+    }),
     row('Fallback URL', 'restricted', {
       key: 'fallbackUrl',
       control: 'text',
@@ -117,6 +123,7 @@ export function applySetting(s: Settings, key: string, by = 1, value = ''): Sett
   if (key === 'theme') next.theme = step(THEMES, s.theme, by);
   else if (key === 'newTab') next.newTab = step(NEW_TABS, s.newTab, by);
   else if (key === 'focusNewTab') next.focusNewTab = !s.focusNewTab;
+  else if (key === 'bangs') next.bangs = !s.bangs;
   else if (key === 'newTabUrl' || key === 'searchUrl' || key === 'fallbackUrl') next[key] = value.trim();
   else if (key.startsWith('colors.')) {
     const color = key.slice(7) as ColorKey;

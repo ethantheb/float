@@ -7,7 +7,8 @@
     "build": "node build.mjs",
     "watch": "node build.mjs --watch",
     "typecheck": "tsc --noEmit",
-    "icons": "node scripts/icons.mjs"
+    "icons": "node scripts/icons.mjs",
+    "bangs": "node scripts/bangs.mjs"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.300",

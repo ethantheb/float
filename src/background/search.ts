@@ -1,6 +1,7 @@
 import { normalize, score } from '../shared/fuzzy';
 import type { Result, ResultKind } from '../shared/messages';
 import type { Settings } from '../shared/settings';
+import { findBang, type BangMatch } from './bangs';
 import { CHROME_PAGES } from './chromePages';
 import { favicon } from './favicons';
 import { getHistory } from './history';
@@ -81,6 +82,15 @@ function actionRow(q: string, settings: Settings): Result {
   return { kind: 'search', title: q, sub, url: q };
 }
 
+/** A bang's search, e.g. `rust !g` → "rust · Search Google". With no terms it opens the site. */
+const bangRow = (b: BangMatch, q: string): Result => ({
+  kind: 'search',
+  title: b.terms || b.name,
+  sub: b.terms ? `Search ${b.name}` : displayUrl(b.url),
+  url: q,
+  target: b.url,
+});
+
 async function withIcons(results: Result[]): Promise<Result[]> {
   await Promise.all(
     results.map(async (r) => {
@@ -122,7 +132,12 @@ async function rank(text: string, settings: Settings, excludeTabId?: number): Pr
   const q = normalize(text);
   if (!q) return { results: await recentTabs(excludeTabId), more: false };
 
-  const [tabs, bookmarks, history] = await Promise.all([chrome.tabs.query({}), getBookmarks(), getHistory()]);
+  const [tabs, bookmarks, history, bang] = await Promise.all([
+    chrome.tabs.query({}),
+    getBookmarks(),
+    getHistory(),
+    settings.bangs ? findBang(text).catch(() => null) : null,
+  ]);
 
   // Keyed by URL so each page appears once; earlier (higher-priority) kinds win.
   // Results are only built for matches: history alone is thousands of entries per keystroke.
@@ -176,6 +191,8 @@ async function rank(text: string, settings: Settings, excludeTabId?: number): Pr
 
   const ranked = [...byUrl.values()].sort((a, b) => b.score - a.score).slice(0, MAX_RESULTS - 1);
   const results = ranked.map((c) => c.result);
-  results.splice(ranked[0]?.promote ? 1 : 0, 0, actionRow(text.trim(), settings));
+  // A bang is an explicit choice of action, so nothing outranks it.
+  if (bang) results.unshift(bangRow(bang, text.trim()));
+  else results.splice(ranked[0]?.promote ? 1 : 0, 0, actionRow(text.trim(), settings));
   return { results, more: ranked.length < MAX_RESULTS - 1 };
 }

@@ -4,7 +4,7 @@ import { OPEN_PALETTE } from '../shared/shortcut';
 import { syncHistory } from './history';
 import { applySetting, optionRows } from './options';
 import { recent, search, searchOlder } from './search';
-import { isOwnPage, toUrl } from './url';
+import { isOwnPage, isWebUrl, toUrl } from './url';
 
 const PALETTE_URL = chrome.runtime.getURL('palette.html');
 /** Pages where extensions can't run content scripts. */
@@ -143,6 +143,7 @@ async function open(result: Result, where: Where, sender: chrome.runtime.Message
 
   const current = where === 'current' && from?.id != null ? from.id : undefined;
   if (result.kind === 'search') {
+    if (result.target && isWebUrl(result.target)) return navigate(result.target, current, from?.windowId);
     const { searchUrl } = await getSettings();
     if (!searchUrl) {
       await chrome.search.query(current != null ? { text: result.url, tabId: current } : { text: result.url, disposition: 'NEW_TAB' });

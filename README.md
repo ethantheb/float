@@ -4,7 +4,7 @@
 
 
 
-A fast, minimal command palette for chromium-based browsers. Search open tabs, bookmarks, history, the web, and jump to browser pages like `flags`. Inspired by the palettes in Zen and Arc.
+A fast, minimal command palette for chromium-based browsers. Search open tabs, bookmarks, history, the web, and jump to browser pages like `flags`. Supports Helium's `!bangs` (e.g. `rust !g`) in any browser. Inspired by the palettes in Zen and Arc.
 
 In browsers that allow it, such as [Helium](https://github.com/imputnet/helium), you can bind it to Ctrl+T.
 

@@ -1,6 +1,9 @@
 # Float
 
-<img width="824" height="403" alt="image" src="https://github.com/user-attachments/assets/0a2d971d-1e63-4dc9-aa77-e3f8a22e4441" />
+<img width="800" height="346" alt="image" src="https://github.com/user-attachments/assets/a55bfe6d-6eb0-4d18-a5ba-d8abd2a569c2" />
+
+---
+
 
 A fast, minimal command palette for chromium-based browsers, inspired by Arc and Zen.
 

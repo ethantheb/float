@@ -13,11 +13,12 @@ let canvas: OffscreenCanvasRenderingContext2D | undefined;
  * palette receives pixels and draws them itself. Decoded here, once, because decoding
  * in the page is async and the first decode in a tab takes tens of ms.
  */
-export function favicon(pageUrl: string): Promise<string | undefined> {
+export function favicon(pageUrl: string, keep = true): Promise<string | undefined> {
   let icon = cache.get(pageUrl);
   if (!icon) {
-    if (cache.size >= MAX_CACHED) cache.delete(cache.keys().next().value!);
     icon = load(pageUrl);
+    if (!keep) return icon;
+    if (cache.size >= MAX_CACHED) cache.delete(cache.keys().next().value!);
     cache.set(pageUrl, icon);
   }
   return icon;

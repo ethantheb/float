@@ -33,12 +33,13 @@ async function showPalette(tab?: chrome.tabs.Tab, editUrl = false): Promise<void
   const tabId = tab?.id;
   if (tabId == null) return openFallback(tab);
   const url = tab.url || tab.pendingUrl || '';
-  const ownPage = isOwnPage(url) || url.startsWith('chrome://newtab');
+  // Incognito's new tab page is the browser's own: overrides don't apply there.
+  const ownPage = isOwnPage(url) || (url.startsWith('chrome://newtab') && !tab.incognito);
   if (!ownPage && RESTRICTED.test(url)) return openFallback(tab);
   const edit = editUrl && !ownPage ? url : undefined;
 
   // Sent along so the palette renders them before it becomes visible.
-  const firstResults = edit ? getSettings().then((s) => search(edit, s, tabId, false)).then((r) => r.results) : recent(tabId);
+  const firstResults = edit ? getSettings().then((s) => search(edit, s, tab, false)).then((r) => r.results) : recent(tab);
   const [results, zoom] = await Promise.all([firstResults, chrome.tabs.getZoom(tabId).catch(() => 1)]);
   // Catch up history while the user starts typing (queued behind the message).
   const catchUp = () => void syncHistory().catch(() => {});
@@ -69,8 +70,15 @@ async function showPalette(tab?: chrome.tabs.Tab, editUrl = false): Promise<void
 
 async function openFallback(tab?: chrome.tabs.Tab): Promise<void> {
   const { fallbackUrl } = await getSettings();
-  const url = (fallbackUrl && toUrl(fallbackUrl)) || `${PALETTE_URL}?fallback`;
-  await chrome.tabs.create({ url, windowId: tab?.windowId });
+  const custom = fallbackUrl ? toUrl(fallbackUrl) : null;
+  const windowId = tab?.windowId;
+  // Extension pages can't load in incognito (they'd open in a regular window), so incognito
+  // only uses a website fallback, else the browser's own new tab: Ctrl-T still opens a tab.
+  if (tab?.incognito) {
+    await chrome.tabs.create(custom && isWebUrl(custom) ? { url: custom, windowId } : { windowId });
+    return;
+  }
+  await chrome.tabs.create({ url: custom || `${PALETTE_URL}?fallback`, windowId });
 }
 
 chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
@@ -90,13 +98,13 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
     // An empty query means the palette just opened: catch up history while the user starts typing.
     if (!msg.text.trim()) void syncHistory().catch(() => {});
     getSettings()
-      .then((s) => search(msg.text, s, sender.tab?.id, !msg.replace))
+      .then((s) => search(msg.text, s, sender.tab, !msg.replace))
       .then((res) => sendResponse({ id: msg.id, ...res } satisfies QueryResponse))
       .catch(() => sendResponse({ id: msg.id, results: [] } satisfies QueryResponse));
     return true;
   }
   if (msg.type === 'older') {
-    searchOlder(msg.text, msg.exclude)
+    searchOlder(msg.text, msg.exclude, sender.tab)
       .then((results) => sendResponse({ id: msg.id, results } satisfies QueryResponse))
       .catch(() => sendResponse({ id: msg.id, results: [] } satisfies QueryResponse));
     return true;

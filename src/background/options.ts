@@ -2,7 +2,7 @@ import { normalize, score } from '../shared/fuzzy';
 import type { Result, Setting } from '../shared/messages';
 import { COLOR_KEYS, type ColorKey, type Settings } from '../shared/settings';
 import { EDIT_URL, SHORTCUTS_URL, currentShortcut } from '../shared/shortcut';
-import { displayUrl, hostOf } from './url';
+import { displayUrl, hostOf, isWebUrl, toUrl } from './url';
 
 type Choices<T extends string> = readonly (readonly [T, string])[];
 const THEMES: Choices<Settings['theme']> = [['auto', 'Follow browser'], ['dark', 'Dark'], ['light', 'Light']];
@@ -47,7 +47,15 @@ function colorRows(s: Settings) {
 
 /** The settings rows (or a submenu's), in fixed order, filtered by `text`. */
 export async function optionRows(text: string, s: Settings, menu?: string): Promise<Result[]> {
-  const [shortcut, editShortcut] = await Promise.all([currentShortcut(), currentShortcut(EDIT_URL)]);
+  const [shortcut, editShortcut, incognito] = await Promise.all([
+    currentShortcut(),
+    currentShortcut(EDIT_URL),
+    chrome.extension.isAllowedIncognitoAccess(),
+  ]);
+  // Incognito ignores new tab overrides, and only a website can be its fallback (see openFallback).
+  const newTabNote = incognito && s.newTab !== 'browser' ? " Incognito windows always use the browser's new tab page." : '';
+  const fallback = s.fallbackUrl ? toUrl(s.fallbackUrl) : null;
+  const fallbackNote = incognito && !(fallback && isWebUrl(fallback)) ? " In incognito, the browser's new tab page opens instead." : '';
   const custom = COLOR_KEYS.filter((k) => s.colors[k]).length;
   const rows = menu === 'colors' ? colorRows(s) : [
     row('Shortcut', 'keyboard key binding hotkey ctrl', {
@@ -79,11 +87,11 @@ export async function optionRows(text: string, s: Settings, menu?: string): Prom
       key: 'newTab',
       control: 'choice',
       value: s.newTab === 'url' ? (s.newTabUrl ? displayUrl(s.newTabUrl) : 'Custom URL') : nameOf(NEW_TABS, s.newTab),
-      help: s.newTab !== 'url'
+      help: (s.newTab !== 'url'
         ? "What new tabs show: Float, the browser's own new tab page, or a URL of your choice."
         : s.newTabUrl
           ? 'New tabs open this URL. Enter edits it; ←/→ choose another page.'
-          : 'Press Enter to set the URL. ←/→ choose another page.',
+          : 'Press Enter to set the URL. ←/→ choose another page.') + newTabNote,
       edit: s.newTab === 'url' ? { key: 'newTabUrl', label: 'New tab URL', raw: s.newTabUrl, placeholder: 'example.com' } : undefined,
     }),
     row('Focus palette on new tabs', 'newtab address bar', {
@@ -112,7 +120,7 @@ export async function optionRows(text: string, s: Settings, menu?: string): Prom
       key: 'fallbackUrl',
       control: 'text',
       value: s.fallbackUrl ? displayUrl(s.fallbackUrl) : 'Palette page',
-      help: "Opened in a new tab when Float can't appear on the current page (browser pages, the Web Store, some Google sites). Leave empty for Float's palette page.",
+      help: `Opened in a new tab when Float can't appear on the current page (browser pages, the Web Store, some Google sites). Leave empty for Float's palette page.${fallbackNote}`,
       edit: { key: 'fallbackUrl', label: 'Fallback URL', raw: s.fallbackUrl, placeholder: "Float's palette page" },
     }),
   ];

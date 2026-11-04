@@ -4,7 +4,7 @@ import type { Settings } from '../shared/settings';
 import { findBang, type BangMatch } from './bangs';
 import { CHROME_PAGES } from './chromePages';
 import { favicon } from './favicons';
-import { getHistory } from './history';
+import { getHistory, type HistoryEntry } from './history';
 import { displayUrl, hostOf, isOwnPage, toUrl } from './url';
 
 const MAX_RESULTS = 8;
@@ -65,10 +65,20 @@ const pageResult = (kind: ResultKind, title: string, url: string): Result => ({
   url,
 });
 
-async function recentTabs(excludeTabId?: number): Promise<Result[]> {
-  const tabs = await chrome.tabs.query({});
-  return tabs
-    .filter((t) => t.id !== excludeTabId)
+/**
+ * The tab the palette was opened from. Incognito and regular windows only see their own
+ * tabs, and incognito doesn't search history.
+ */
+export type From = Pick<chrome.tabs.Tab, 'id' | 'incognito'> | undefined;
+
+/** Open tabs on the same side of the incognito boundary as `from`, except `from` itself. */
+async function sameSideTabs(from: From): Promise<chrome.tabs.Tab[]> {
+  const incognito = !!from?.incognito;
+  return (await chrome.tabs.query({})).filter((t) => t.incognito === incognito && t.id !== from?.id);
+}
+
+async function recentTabs(from: From): Promise<Result[]> {
+  return (await sameSideTabs(from))
     .sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))
     .slice(0, MAX_RESULTS)
     .map(tabResult);
@@ -91,24 +101,26 @@ const bangRow = (b: BangMatch, q: string): Result => ({
   target: b.url,
 });
 
-async function withIcons(results: Result[]): Promise<Result[]> {
+/** Incognito's pages aren't cached (bookmarks are shared), so they don't outlive the window. */
+async function withIcons(results: Result[], from: From): Promise<Result[]> {
   await Promise.all(
     results.map(async (r) => {
-      if (r.kind !== 'search' && r.kind !== 'chrome' && r.kind !== 'options') r.icon = await favicon(r.url);
+      const keep = !from?.incognito || r.kind === 'bookmark';
+      if (r.kind !== 'search' && r.kind !== 'chrome' && r.kind !== 'options') r.icon = await favicon(r.url, keep);
     }),
   );
   return results;
 }
 
 /** Results for an empty query: the most recently used tabs. */
-export async function recent(excludeTabId?: number): Promise<Result[]> {
-  return withIcons(await recentTabs(excludeTabId));
+export async function recent(from: From): Promise<Result[]> {
+  return withIcons(await recentTabs(from), from);
 }
 
 /** `withTabs: false` leaves open tabs out, for editing the page's URL: Enter changes the page there. */
-export async function search(text: string, settings: Settings, excludeTabId?: number, withTabs = true): Promise<Omit<QueryResponse, 'id'>> {
-  const ranked = await rank(text, settings, excludeTabId, withTabs);
-  return { ...ranked, results: await withIcons(ranked.results) };
+export async function search(text: string, settings: Settings, from: From, withTabs = true): Promise<Omit<QueryResponse, 'id'>> {
+  const ranked = await rank(text, settings, from, withTabs);
+  return { ...ranked, results: await withIcons(ranked.results, from) };
 }
 
 /**
@@ -116,27 +128,28 @@ export async function search(text: string, settings: Settings, excludeTabId?: nu
  * all history (tens of ms on large profiles), so the palette asks for it separately
  * and appends the results below the ones already shown.
  */
-export async function searchOlder(text: string, exclude: string[]): Promise<Result[]> {
+export async function searchOlder(text: string, exclude: string[], from: From): Promise<Result[]> {
   const q = normalize(text);
   const slots = MAX_RESULTS - exclude.length;
-  if (!q || slots <= 0) return [];
+  if (!q || slots <= 0 || from?.incognito) return [];
   const shown = new Set(exclude);
   const found = (await chrome.history.search({ text: q, startTime: 0, maxResults: 20 }))
     .filter((h): h is chrome.history.HistoryItem & { url: string } => !!h.url && !shown.has(h.url) && !isOwnPage(h.url))
     .map((h) => ({ h, s: Math.max(score(q, (h.title ?? '').toLowerCase()), score(q, displayUrl(h.url).toLowerCase())) }))
     .sort((a, b) => b.s - a.s)
     .slice(0, slots);
-  return withIcons(found.map(({ h }) => pageResult('history', h.title ?? '', h.url)));
+  return withIcons(found.map(({ h }) => pageResult('history', h.title ?? '', h.url)), from);
 }
 
-async function rank(text: string, settings: Settings, excludeTabId?: number, withTabs = true): Promise<Omit<QueryResponse, 'id'>> {
+async function rank(text: string, settings: Settings, from: From, withTabs = true): Promise<Omit<QueryResponse, 'id'>> {
   const q = normalize(text);
-  if (!q) return { results: withTabs ? await recentTabs(excludeTabId) : [], more: false };
+  if (!q) return { results: withTabs ? await recentTabs(from) : [], more: false };
 
+  const incognito = !!from?.incognito;
   const [tabs, bookmarks, history, bang] = await Promise.all([
-    withTabs ? chrome.tabs.query({}) : [],
+    withTabs ? sameSideTabs(from) : [],
     getBookmarks(),
-    getHistory(),
+    incognito ? new Map<string, HistoryEntry>() : getHistory(),
     settings.bangs ? findBang(text).catch(() => null) : null,
   ]);
   // A leading bang is a mode (the palette shows it as a chip): its search is the only row.
@@ -161,7 +174,7 @@ async function rank(text: string, settings: Settings, excludeTabId?: number, wit
   };
 
   for (const tab of tabs) {
-    if (tab.id === excludeTabId || !tab.url) continue;
+    if (!tab.url) continue;
     add(tab.url, (tab.title ?? '').toLowerCase(), displayUrl(tab.url).toLowerCase(), 1.1, () => tabResult(tab));
   }
 
@@ -197,5 +210,6 @@ async function rank(text: string, settings: Settings, excludeTabId?: number, wit
   // A bang is an explicit choice of action, so nothing outranks it.
   if (bang) results.unshift(bangRow(bang, text.trim()));
   else results.splice(ranked[0]?.promote ? 1 : 0, 0, actionRow(text.trim(), settings));
-  return { results, more: ranked.length < MAX_RESULTS - 1 };
+  // `more` asks for older history, which incognito doesn't search.
+  return { results, more: !incognito && ranked.length < MAX_RESULTS - 1 };
 }

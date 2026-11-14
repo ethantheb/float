@@ -147,6 +147,11 @@
 }
 .panel.pending {
   opacity: 0;
+  transform: translateY(-6px);
+}
+/* Only the page ever has .pending (it loads before its results), so the overlay never animates. */
+.panel:not(.pending) {
+  transition: opacity 140ms ease-out, transform 140ms ease-out;
 }
 
 .row {

@@ -1,7 +1,0 @@
-/* The palette page loads before its results arrive (.pending, see palette.css), so it fades in. The overlay never has .pending and never animates. */
-.panel.pending {
-  transform: translateY(-6px);
-}
-.panel:not(.pending) {
-  transition: opacity 140ms ease-out, transform 140ms ease-out;
-}

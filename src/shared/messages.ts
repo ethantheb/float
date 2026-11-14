@@ -31,6 +31,8 @@ export interface Setting {
   help: string;
   /** Enter edits this instead of stepping (e.g. a custom URL). */
   edit?: SettingEdit;
+  /** Enter copies this to the clipboard before acting. */
+  copy?: string;
 }
 
 export interface Result {

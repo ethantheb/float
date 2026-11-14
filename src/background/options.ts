@@ -1,7 +1,7 @@
 import { normalize, score } from '../shared/fuzzy';
 import type { Result, Setting } from '../shared/messages';
 import { COLOR_KEYS, type ColorKey, type Settings } from '../shared/settings';
-import { EDIT_URL, SHORTCUTS_URL, currentShortcut } from '../shared/shortcut';
+import { EDIT_URL, SHORTCUTS_URL, STARTUP_URL, currentShortcut } from '../shared/shortcut';
 import { displayUrl, hostOf, isWebUrl, toUrl } from './url';
 
 type Choices<T extends string> = readonly (readonly [T, string])[];
@@ -103,6 +103,14 @@ export async function optionRows(text: string, s: Settings, menu?: string): Prom
         ? 'Only applies when Float is the new tab page (see New tab page above).'
         : 'Browsers focus the address bar on new tab pages. When on, Float swaps the new tab for an identical one so you can type straight away.',
     }),
+    // `?tab`: a bare palette.html is treated as a new tab page and gets swapped (see palette.ts).
+    row('Startup page', 'launch start browser home copy address', {
+      key: 'startup',
+      control: 'link',
+      copy: chrome.runtime.getURL('palette.html?tab'),
+      value: 'Copy and open',
+      help: "Enter copies Float's address and opens the browser's startup settings. Add it there as a page to open Float when the browser launches.",
+    }, STARTUP_URL),
     row('Search URL', 'engine web kagi google', {
       key: 'searchUrl',
       control: 'text',

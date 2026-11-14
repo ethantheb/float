@@ -3,6 +3,7 @@ import type { Message } from '../shared/messages';
 import { DEFAULTS, SETTINGS_CACHE, applyAppearance, loadSettings, onSettingsChanged, type Settings } from '../shared/settings';
 import { createHost, unzoom } from '../ui/host';
 import { Palette } from '../ui/palette';
+import fadeCss from './fade.css';
 import { showWelcome } from './welcome';
 
 /** localStorage key for `devicePixelRatio` at 100% zoom. */
@@ -68,6 +69,9 @@ async function leave(): Promise<void> {
 
 function mount(): void {
   const { host, root } = createHost('open');
+  const fade = new CSSStyleSheet();
+  fade.replaceSync(fadeCss);
+  root.adoptedStyleSheets = [...root.adoptedStyleSheets, fade];
   const palette = new Palette(root, {
     page: true,
     // Esc closes this tab like the overlay closes, unless it's the window's last tab.

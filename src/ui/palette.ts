@@ -549,6 +549,8 @@ export class Palette {
     const s = result.setting;
     if (s?.control === 'menu') return this.#openMenu(s.key, s.label ?? result.title);
     if (s?.disabled) return;
+    // Not on insecure pages, where there is no clipboard.
+    if (s?.copy) void navigator.clipboard?.writeText(s.copy).catch(() => {});
     if (s && s.control !== 'link') {
       if (s.edit) this.#startEdit(s.edit);
       else this.#set(s.key, alt ? -1 : 1);

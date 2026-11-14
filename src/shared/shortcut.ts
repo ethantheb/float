@@ -11,3 +11,6 @@ export async function currentShortcut(command = OPEN_PALETTE): Promise<string> {
   const commands = await chrome.commands.getAll();
   return commands.find((c) => c.name === command)?.shortcut ?? '';
 }
+
+/** Where the browser lets users add startup pages. */
+export const STARTUP_URL = 'chrome://settings/onStartup';

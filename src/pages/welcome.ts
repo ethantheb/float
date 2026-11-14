@@ -1,4 +1,4 @@
-import { OPEN_PALETTE, SHORTCUTS_URL, currentShortcut } from '../shared/shortcut';
+import { OPEN_PALETTE, SHORTCUTS_URL, STARTUP_URL, currentShortcut } from '../shared/shortcut';
 import { el, icon } from '../ui/palette';
 import css from './welcome.css';
 
@@ -21,6 +21,14 @@ export function showWelcome(host: HTMLElement, root: ShadowRoot): void {
   const key = el('kbd', '', suggested ?? '');
   const shortcutText = el('span', '', 'Press ', key, ' on any page to open Float over it.', el('br', ''), el('span', 'muted', 'In supported browsers you can bind it to Ctrl+T.'));
   const change = button('', 'Change shortcut', () => void chrome.tabs.create({ url: SHORTCUTS_URL }));
+  // `?tab`, so Float's own new tab handling (palette.ts) doesn't swap or redirect it.
+  const copy = button('', 'Copy and open', () => {
+    // Open after the copy: switching tabs first can lose the document's focus, which the copy needs.
+    void navigator.clipboard
+      .writeText(chrome.runtime.getURL('palette.html?tab'))
+      .catch(() => {})
+      .finally(() => void chrome.tabs.create({ url: STARTUP_URL }));
+  });
   const dismiss = button('close', '', close);
   dismiss.title = 'Close';
   dismiss.setAttribute('aria-label', 'Close');
@@ -32,6 +40,7 @@ export function showWelcome(host: HTMLElement, root: ShadowRoot): void {
     el('h1', '', 'Welcome to Float'),
     el('p', '', shortcutText, change),
     el('p', '', el('span', '', 'Float is also your ', el('strong', '', 'new tab page'), '. You can change that in the options below.')),
+    el('p', '', el('span', '', "To open Float when the browser launches, add its address as a startup page. This copies it and opens the browser's startup settings."), copy),
     el('p', '', el('span', '', icon(['M12 5v14m-6-6 6 6 6-6'], 'down'), "These are Float's options. To get back here from any page, open Float and search ", el('strong', '', 'Float options'), '.')),
     dismiss,
   );

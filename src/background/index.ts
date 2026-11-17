@@ -1,5 +1,5 @@
-import type { Message, QueryResponse, Result, Where } from '../shared/messages';
-import { DEFAULTS, loadSettings, onSettingsChanged, saveSettings, type Settings } from '../shared/settings';
+import { SCOPES, type Message, type QueryResponse, type Result, type ScopeKey, type Where } from '../shared/messages';
+import { DEFAULTS, loadSettings, onSettingsChanged, saveSettings, sourceOn, type Settings } from '../shared/settings';
 import { EDIT_URL, OPEN_PALETTE } from '../shared/shortcut';
 import { syncHistory } from './history';
 import { applySetting, optionRows } from './options';
@@ -13,46 +13,64 @@ const RESTRICTED =
 
 let settings: Promise<Settings> | null = null;
 const getSettings = () => (settings ??= loadSettings().catch(() => DEFAULTS));
+/** Catches the history index up, unless history is off (then nothing reads it). */
+const syncHistoryIfUsed = () =>
+  void getSettings()
+    .then((s) => {
+      if (sourceOn(s, 'history')) return syncHistory();
+    })
+    .catch(() => {});
 onSettingsChanged(() => {
   settings = null;
 });
 
-chrome.commands.onCommand.addListener((command, tab) => {
+function runCommand(command: string, tab?: chrome.tabs.Tab): void {
   if (command === OPEN_PALETTE) void showPalette(tab);
   if (command === EDIT_URL) void showPalette(tab, true);
-});
+  // `search-tabs` etc.: the palette narrowed to that source.
+  const scope = command.slice(7) as ScopeKey;
+  if (command.startsWith('search-') && Object.hasOwn(SCOPES, scope)) void showPalette(tab, false, scope);
+}
+chrome.commands.onCommand.addListener(runCommand);
 chrome.runtime.onInstalled.addListener(({ reason }) => {
   if (reason === 'install') void chrome.tabs.create({ url: 'options.html?welcome' });
 });
-// Tests call this from the worker: puppeteer can't press browser shortcuts.
-Object.assign(globalThis, { showPalette });
+// Tests call these from the worker: puppeteer can't press browser shortcuts.
+Object.assign(globalThis, { showPalette, runCommand });
 
-/** `editUrl`: open on this page's URL, so Enter changes the page. Our own pages just open the palette. */
-async function showPalette(tab?: chrome.tabs.Tab, editUrl = false): Promise<void> {
+/** `editUrl`: open on this page's URL, so Enter changes the page. `scope`: open narrowed to one source. Our own pages just open the palette. */
+async function showPalette(tab?: chrome.tabs.Tab, editUrl = false, scope?: ScopeKey): Promise<void> {
   tab ??= (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0];
   const tabId = tab?.id;
-  if (tabId == null) return openFallback(tab);
+  // What the fallback page needs to do what was asked: the scope, or the URL to edit.
+  const asked = new URLSearchParams(scope ? { scope } : {});
+  if (tabId == null) return openFallback(tab, asked);
   const url = tab.url || tab.pendingUrl || '';
   // Incognito's new tab page is the browser's own: overrides don't apply there.
   const ownPage = isOwnPage(url) || (url.startsWith('chrome://newtab') && !tab.incognito);
-  if (!ownPage && RESTRICTED.test(url)) return openFallback(tab);
+  if (editUrl && url && !ownPage) asked.set('edit', url);
+  if (!ownPage && RESTRICTED.test(url)) return openFallback(tab, asked);
   const edit = editUrl && !ownPage ? url : undefined;
 
   // Sent along so the palette renders them before it becomes visible.
-  const firstResults = edit ? getSettings().then((s) => search(edit, s, tab, false)).then((r) => r.results) : recent(tab);
+  const firstResults = edit
+    ? getSettings().then((s) => search(edit, s, tab, false)).then((r) => r.results)
+    : scope
+      ? getSettings().then((s) => search('', s, tab, true, scope)).then((r) => r.results)
+      : getSettings().then((s) => recent(tab, s));
   const [results, zoom] = await Promise.all([firstResults, chrome.tabs.getZoom(tabId).catch(() => 1)]);
   // Catch up history while the user starts typing (queued behind the message).
-  const catchUp = () => void syncHistory().catch(() => {});
+  const catchUp = syncHistoryIfUsed;
 
   // Our own new tab / fallback page: just refocus its palette.
   if (ownPage) {
-    const focused = chrome.runtime.sendMessage<Message>({ type: 'focus', tabId, results }).catch(() => false);
+    const focused = chrome.runtime.sendMessage<Message>({ type: 'focus', tabId, results, scope }).catch(() => false);
     catchUp();
     if (await focused) return;
-    if (RESTRICTED.test(url)) return openFallback(tab);
+    if (RESTRICTED.test(url)) return openFallback(tab, asked);
   }
 
-  const toggle: Message = { type: 'toggle', results, zoom, edit };
+  const toggle: Message = { type: 'toggle', results, zoom, edit, scope };
   try {
     const sent = chrome.tabs.sendMessage(tabId, toggle, { frameId: 0 });
     if (!ownPage) catchUp();
@@ -63,12 +81,13 @@ async function showPalette(tab?: chrome.tabs.Tab, editUrl = false): Promise<void
       await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'], injectImmediately: true });
       await chrome.tabs.sendMessage(tabId, toggle, { frameId: 0 });
     } catch {
-      await openFallback(tab);
+      await openFallback(tab, asked);
     }
   }
 }
 
-async function openFallback(tab?: chrome.tabs.Tab): Promise<void> {
+/** `asked`: passed to the built-in palette page (not to a custom fallback URL). */
+async function openFallback(tab?: chrome.tabs.Tab, asked?: URLSearchParams): Promise<void> {
   const { fallbackUrl } = await getSettings();
   const custom = fallbackUrl ? toUrl(fallbackUrl) : null;
   const windowId = tab?.windowId;
@@ -78,7 +97,7 @@ async function openFallback(tab?: chrome.tabs.Tab): Promise<void> {
     await chrome.tabs.create(custom && isWebUrl(custom) ? { url: custom, windowId } : { windowId });
     return;
   }
-  await chrome.tabs.create({ url: custom || `${PALETTE_URL}?fallback`, windowId });
+  await chrome.tabs.create({ url: custom || `${PALETTE_URL}?fallback${asked?.size ? `&${asked}` : ''}`, windowId });
 }
 
 chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
@@ -96,15 +115,16 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
   }
   if (msg.type === 'query') {
     // An empty query means the palette just opened: catch up history while the user starts typing.
-    if (!msg.text.trim()) void syncHistory().catch(() => {});
+    if (!msg.text.trim()) syncHistoryIfUsed();
     getSettings()
-      .then((s) => search(msg.text, s, sender.tab, !msg.replace))
+      .then((s) => search(msg.text, s, sender.tab, !msg.replace, msg.scope))
       .then((res) => sendResponse({ id: msg.id, ...res } satisfies QueryResponse))
       .catch(() => sendResponse({ id: msg.id, results: [] } satisfies QueryResponse));
     return true;
   }
   if (msg.type === 'older') {
-    searchOlder(msg.text, msg.exclude, sender.tab)
+    getSettings()
+      .then((s) => searchOlder(msg.text, msg.exclude, sender.tab, s))
       .then((results) => sendResponse({ id: msg.id, results } satisfies QueryResponse))
       .catch(() => sendResponse({ id: msg.id, results: [] } satisfies QueryResponse));
     return true;

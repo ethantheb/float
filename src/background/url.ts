@@ -39,3 +39,17 @@ export function isWebUrl(url: string): boolean {
     return false;
   }
 }
+
+const SECOND_LEVEL = new Set(['co', 'com', 'org', 'net', 'gov', 'edu', 'ac']);
+
+/** A readable name for a site, e.g. https://mail.google.com/ → "Google". The URL itself if there's no host to name. */
+export function siteName(url: string): string {
+  const host = isWebUrl(url) ? hostOf(url).replace(/:\d+$/, '') : '';
+  const labels = host.split('.').filter(Boolean);
+  if (labels.length < 2 || /^[\d.]+$/.test(host) || host.includes(':')) return displayUrl(url);
+  labels.pop();
+  if (labels.length > 1 && SECOND_LEVEL.has(labels[labels.length - 1])) labels.pop();
+  const name = labels[labels.length - 1];
+  if (!name) return displayUrl(url);
+  return name[0].toUpperCase() + name.slice(1);
+}

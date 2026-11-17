@@ -1,6 +1,6 @@
 import { normalize, score } from '../shared/fuzzy';
 import type { Result, Setting } from '../shared/messages';
-import { COLOR_KEYS, type ColorKey, type Settings } from '../shared/settings';
+import { COLOR_KEYS, SOURCE_KEYS, sourceOn, type ColorKey, type SourceKey, type Settings } from '../shared/settings';
 import { EDIT_URL, SHORTCUTS_URL, STARTUP_URL, currentShortcut } from '../shared/shortcut';
 import { displayUrl, hostOf, isWebUrl, toUrl } from './url';
 
@@ -19,6 +19,14 @@ const COLORS: Record<ColorKey, [name: string, help: string]> = {
   border: ['Border', 'The outline and dividers.'],
   selected: ['Selection', 'The highlighted row.'],
   accent: ['Accent', 'The text cursor.'],
+};
+
+const SOURCES: Record<SourceKey, [name: string, help: string]> = {
+  tabs: ['Tabs', 'Open tabs, other than pinned ones.'],
+  pinned: ['Pinned tabs', 'Open pinned tabs.'],
+  bookmarks: ['Bookmarks', 'Your bookmarks.'],
+  history: ['History', 'Pages you visited. Incognito windows never show history. Turning this off also stops Float from indexing it.'],
+  chrome: ['Browser pages', 'Pages like chrome://flags and chrome://settings.'],
 };
 
 const row = (title: string, keywords: string, setting: Setting, url = ''): Result & { keywords: string } => ({
@@ -45,6 +53,18 @@ function colorRows(s: Settings) {
   });
 }
 
+function sourceRows(s: Settings) {
+  return SOURCE_KEYS.map((key) => {
+    const [name, help] = SOURCES[key];
+    return row(name, 'search results show hide source', {
+      key: `sources.${key}`,
+      control: 'toggle',
+      value: sourceOn(s, key) ? 'On' : 'Off',
+      help: `${help} Turn off to leave these out of the palette's results.`,
+    });
+  });
+}
+
 /** The settings rows (or a submenu's), in fixed order, filtered by `text`. */
 export async function optionRows(text: string, s: Settings, menu?: string): Promise<Result[]> {
   const [shortcut, editShortcut, incognito] = await Promise.all([
@@ -57,7 +77,8 @@ export async function optionRows(text: string, s: Settings, menu?: string): Prom
   const fallback = s.fallbackUrl ? toUrl(s.fallbackUrl) : null;
   const fallbackNote = incognito && !(fallback && isWebUrl(fallback)) ? " In incognito, the browser's new tab page opens instead." : '';
   const custom = COLOR_KEYS.filter((k) => s.colors[k]).length;
-  const rows = menu === 'colors' ? colorRows(s) : [
+  const hidden = SOURCE_KEYS.filter((k) => !sourceOn(s, k)).length;
+  const rows = menu === 'colors' ? colorRows(s) : menu === 'sources' ? sourceRows(s) : [
     row('Shortcut', 'keyboard key binding hotkey ctrl', {
       key: 'shortcut',
       control: 'link',
@@ -118,6 +139,13 @@ export async function optionRows(text: string, s: Settings, menu?: string): Prom
       help: "Where web searches go. Use %s for the query. Leave empty for the browser's default search engine.",
       edit: { key: 'searchUrl', label: 'Search URL', raw: s.searchUrl, placeholder: 'https://kagi.com/search?q=%s' },
     }),
+    row('Search sources', 'tabs pinned history bookmarks browser pages results show hide', {
+      key: 'sources',
+      control: 'menu',
+      label: 'Sources',
+      value: hidden ? `${hidden} off` : 'All on',
+      help: 'Choose what the palette searches: tabs, pinned tabs, bookmarks, history, and browser pages.',
+    }),
     row('Bangs', 'bang ! shortcut keyword helium duckduckgo kagi', {
       key: 'bangs',
       control: 'toggle',
@@ -141,13 +169,16 @@ export async function optionRows(text: string, s: Settings, menu?: string): Prom
 
 /** `by` steps a choice, `value` sets text, and toggles flip. */
 export function applySetting(s: Settings, key: string, by = 1, value = ''): Settings {
-  const next: Settings = { ...s, colors: { ...s.colors } };
+  const next: Settings = { ...s, colors: { ...s.colors }, sources: { ...s.sources } };
   if (key === 'theme') next.theme = step(THEMES, s.theme, by);
   else if (key === 'newTab') next.newTab = step(NEW_TABS, s.newTab, by);
   else if (key === 'focusNewTab') next.focusNewTab = !s.focusNewTab;
   else if (key === 'bangs') next.bangs = !s.bangs;
   else if (key === 'newTabUrl' || key === 'searchUrl' || key === 'fallbackUrl') next[key] = value.trim();
-  else if (key.startsWith('colors.')) {
+  else if (key.startsWith('sources.')) {
+    const source = key.slice(8) as SourceKey;
+    next.sources[source] = !sourceOn(s, source);
+  } else if (key.startsWith('colors.')) {
     const color = key.slice(7) as ColorKey;
     if (value.trim()) next.colors[color] = value.trim();
     else delete next.colors[color];

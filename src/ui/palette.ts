@@ -1,4 +1,4 @@
-import { ICON_PX, type Bang, type Message, type QueryResponse, type Result, type SettingEdit, type Where } from '../shared/messages';
+import { ICON_PX, SCOPES, type Bang, type ScopeKey, type Message, type QueryResponse, type Result, type SettingEdit, type Where } from '../shared/messages';
 
 const MAX_ROWS = 8;
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -10,6 +10,7 @@ const ICONS = {
     'M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6a7 7 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.5-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2Z',
   ],
   arrow: ['M5 12h14', 'm13 6 6 6-6 6'],
+  pin: ['M12 16v6', 'M9 10.8a2 2 0 0 1-1.1 1.8l-1.8.9A2 2 0 0 0 5 15.2V16h14v-.8a2 2 0 0 0-1.1-1.8l-1.8-.9A2 2 0 0 1 15 10.8V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1Z'],
 };
 
 /** Builds a stroked SVG icon without innerHTML (pages may enforce Trusted Types). */
@@ -108,8 +109,14 @@ export class Palette {
   #filter = '';
   /** The bang in the chip; queries carry it. */
   #bang: Bang | null = null;
+  /** The source the search is narrowed to (also a chip); queries carry it. */
+  #scope: ScopeKey | null = null;
   /** Opened to edit the page's URL: Enter changes this page instead of opening a tab. */
   #replace = false;
+  /** What it was opened for: 'edit' (the page's URL), a scope, or ''. Esc out of a scope makes it ''. */
+  get mode(): string {
+    return this.#replace ? 'edit' : (this.#scope ?? '');
+  }
 
   constructor(parent: Node, opts: PaletteOptions) {
     this.#opts = opts;
@@ -198,7 +205,8 @@ export class Palette {
       row.el.dataset.i = String(this.#rows.length);
       row.el.hidden = true;
       row.value.hidden = true;
-      row.el.append(row.favicon, row.search, row.gear, el('span', 'text', row.title, row.sep, row.sub), row.badge, row.value);
+      // The pin sits over the favicon's corner; CSS shows it on `.pinned` rows.
+      row.el.append(row.favicon, row.search, row.gear, icon(ICONS.pin, 'pin'), el('span', 'text', row.title, row.sep, row.sub), row.badge, row.value);
       this.#list.append(row.el);
       this.#rows.push(row);
     }
@@ -209,8 +217,9 @@ export class Palette {
    * with the shortcut) synchronously, so they're in the first visible frame, or asks for them.
    * `editUrl` starts with that URL selected, and Enter then changes the page.
    */
-  open(results?: Result[], editUrl?: string): void {
+  open(results?: Result[], editUrl?: string, scope?: ScopeKey): void {
     this.reset();
+    if (scope) this.#setScope(scope);
     if (editUrl) {
       this.#replace = true;
       this.#input.value = editUrl;
@@ -250,6 +259,7 @@ export class Palette {
     this.#sent++;
     this.#replace = false;
     this.#setBang(null);
+    this.#setScope(null);
     if (this.#options) this.#setMode(false);
   }
 
@@ -265,7 +275,7 @@ export class Palette {
   }
 
   #updateChip(): void {
-    this.#chip.textContent = this.#editing?.label ?? this.#menu?.label ?? this.#bang?.name ?? 'Float options';
+    this.#chip.textContent = this.#editing?.label ?? this.#menu?.label ?? this.#bang?.name ?? (this.#scope && SCOPES[this.#scope]) ?? 'Float options';
   }
 
   #setBang(bang: Bang | null): void {
@@ -273,6 +283,13 @@ export class Palette {
     this.#updateChip();
     this.#chip.hidden = !bang;
     this.#input.placeholder = bang ? `Search ${bang.name}...` : 'Search...';
+  }
+
+  #setScope(scope: ScopeKey | null): void {
+    this.#scope = scope;
+    this.#updateChip();
+    this.#chip.hidden = !scope;
+    this.#input.placeholder = scope ? `Search ${SCOPES[scope].toLowerCase()}...` : 'Search...';
   }
 
   /** Lists the current level unfiltered, selecting the setting `select`. */
@@ -290,12 +307,16 @@ export class Palette {
   /** Esc or the chip: stop editing, go up a level, or close. */
   #escape(): void {
     if (this.#editing) this.#finishEdit(false);
-    else if (this.#options || this.#bang) this.#back();
+    else if (this.#options || this.#bang || this.#scope) this.#back();
     else this.#opts.onClose(true);
   }
 
-  /** Up a level, reselecting the submenu just left. Leaving a bang keeps its terms as a search. */
+  /** Up a level, reselecting the submenu just left. Leaving a bang or scope keeps what's typed as a search. */
   #back(): void {
+    if (this.#scope) {
+      this.#setScope(null);
+      return this.#query(this.#input.value);
+    }
     if (this.#bang) {
       this.#setBang(null);
       return this.#query(this.#input.value);
@@ -392,7 +413,7 @@ export class Palette {
     const id = ++this.#sent;
     const msg: Message = this.#options
       ? { type: 'query', id, text, options: true, menu: this.#menu?.key }
-      : { type: 'query', id, text: this.#bang ? `!${this.#bang.trigger} ${text}` : text, replace: this.#replace };
+      : { type: 'query', id, text: this.#bang ? `!${this.#bang.trigger} ${text}` : text, replace: this.#replace, scope: this.#scope ?? undefined };
     void send<QueryResponse>(msg).then((res) => {
       if (!res || id !== this.#sent) return;
       // A leading bang moves into the chip once a space follows it.
@@ -442,15 +463,18 @@ export class Palette {
       if (!r) return;
       const s = r.setting;
       const gear = r.kind === 'chrome' || r.kind === 'options';
-      const favicon = r.kind !== 'search' && !gear && !s;
+      const note = r.kind === 'note';
+      const glyph = r.kind === 'search' || r.kind === 'scope';
+      const favicon = !glyph && !gear && !s && !note;
       row.favicon.hidden = !favicon;
-      row.search.style.display = r.kind === 'search' ? '' : 'none';
+      row.search.style.display = glyph ? '' : 'none';
       row.gear.style.display = gear ? '' : 'none';
       if (favicon) this.#drawIcon(row, r.icon);
       row.title.textContent = r.title;
       row.sub.textContent = r.sub;
       row.sep.hidden = row.sub.hidden = !r.sub || r.sub === r.title;
       row.badge.hidden = r.kind !== 'tab';
+      row.el.classList.toggle('pinned', !!r.pinned);
       row.value.hidden = !s?.value;
       if (s) {
         row.valueText.textContent = s.value;
@@ -458,7 +482,7 @@ export class Palette {
         if (s.swatch) row.swatch.style.background = s.swatch;
         row.value.classList.toggle('choice', s.control === 'choice');
       }
-      row.el.classList.toggle('disabled', !!s?.disabled);
+      row.el.classList.toggle('disabled', !!s?.disabled || note);
       row.el.classList.toggle('selected', i === this.#selected);
     });
     this.#updateFoot();
@@ -502,7 +526,7 @@ export class Palette {
     const down = k === 'ArrowDown' || (k === 'Tab' && !e.shiftKey) || (ctrl && (k === 'n' || k === 'j'));
     const up = k === 'ArrowUp' || (k === 'Tab' && e.shiftKey) || (ctrl && (k === 'p' || k === 'k'));
     const atStart = this.#input.selectionEnd === 0;
-    const deleteChip = k === 'Backspace' && atStart && (this.#options || !!this.#bang);
+    const deleteChip = k === 'Backspace' && atStart && (this.#options || !!this.#bang || !!this.#scope);
     const setting = this.#results[this.#selected]?.setting;
     const choice = (k === 'ArrowLeft' || k === 'ArrowRight') && setting?.control === 'choice' ? setting : null;
 
@@ -541,10 +565,15 @@ export class Palette {
   /** `alt` (Shift) flips the default: new tab from the overlay, this tab from the palette page or when editing the URL. */
   #activate(i: number, alt: boolean): void {
     const result = this.#results[i];
-    if (!result) return;
+    if (!result || result.kind === 'note') return;
     if (result.kind === 'options') {
       this.#setMode(true);
       return this.#clear();
+    }
+    if (result.kind === 'scope') {
+      this.#setScope(result.url as ScopeKey);
+      this.#input.value = '';
+      return this.#query('');
     }
     const s = result.setting;
     if (s?.control === 'menu') return this.#openMenu(s.key, s.label ?? result.title);

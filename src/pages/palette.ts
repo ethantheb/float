@@ -1,5 +1,5 @@
 import { toUrl } from '../background/url';
-import type { Message } from '../shared/messages';
+import { SCOPES, type Message, type ScopeKey } from '../shared/messages';
 import { DEFAULTS, SETTINGS_CACHE, applyAppearance, loadSettings, onSettingsChanged, type Settings } from '../shared/settings';
 import { createHost, unzoom } from '../ui/host';
 import { Palette } from '../ui/palette';
@@ -104,7 +104,12 @@ function mount(): void {
   if (optionsPage) {
     palette.openOptions();
     if (location.search === '?welcome') showWelcome(host, root);
-  } else palette.open();
+  } else {
+    // The fallback page can be asked for a scope, or to edit a URL (see openFallback).
+    const asked = new URLSearchParams(location.search);
+    const scope = asked.get('scope');
+    palette.open(undefined, asked.get('edit') ?? undefined, scope && Object.hasOwn(SCOPES, scope) ? (scope as ScopeKey) : undefined);
+  }
 
   // The shortcut pressed while this page is active refocuses it instead of opening another tab.
   let tabId: number | undefined;
@@ -117,7 +122,7 @@ function mount(): void {
   });
   chrome.runtime.onMessage.addListener((msg: Message, _sender, sendResponse) => {
     if (msg.type !== 'focus' || msg.tabId !== tabId) return;
-    palette.open(msg.results);
+    palette.open(msg.results, undefined, msg.scope);
     sendResponse(true);
   });
 }

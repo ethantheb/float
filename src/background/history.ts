@@ -73,3 +73,6 @@ async function sync(): Promise<Map<string, HistoryEntry>> {
   lastSync = now;
   return map;
 }
+
+/** The index if it's loaded, without waiting for or starting a load. */
+export const peekHistory = (): Map<string, HistoryEntry> | null => index;

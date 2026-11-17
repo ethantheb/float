@@ -1,11 +1,11 @@
 import { normalize, score } from '../shared/fuzzy';
-import type { QueryResponse, Result, ResultKind } from '../shared/messages';
-import type { Settings } from '../shared/settings';
+import { SCOPES, type QueryResponse, type Result, type ResultKind, type ScopeKey } from '../shared/messages';
+import { sourceOn, type Settings } from '../shared/settings';
 import { findBang, type BangMatch } from './bangs';
 import { CHROME_PAGES } from './chromePages';
 import { favicon } from './favicons';
-import { getHistory, type HistoryEntry } from './history';
-import { displayUrl, hostOf, isOwnPage, toUrl } from './url';
+import { getHistory, peekHistory, type HistoryEntry } from './history';
+import { displayUrl, hostOf, isOwnPage, siteName, toUrl } from './url';
 
 const MAX_RESULTS = 8;
 const OPTIONS_KEY = 'float:options';
@@ -21,6 +21,7 @@ interface Candidate {
 interface Bookmark {
   title: string;
   url: string;
+  added: number;
   /** Lowercased title and display URL, precomputed for matching. */
   t: string;
   d: string;
@@ -41,7 +42,7 @@ async function getBookmarks(): Promise<Bookmark[]> {
   const out: Bookmark[] = [];
   const walk = (nodes: chrome.bookmarks.BookmarkTreeNode[]) => {
     for (const n of nodes) {
-      if (n.url && !isOwnPage(n.url)) out.push({ title: n.title, url: n.url, t: n.title.toLowerCase(), d: displayUrl(n.url).toLowerCase() });
+      if (n.url && !isOwnPage(n.url)) out.push({ title: n.title, url: n.url, added: n.dateAdded ?? 0, t: n.title.toLowerCase(), d: displayUrl(n.url).toLowerCase() });
       if (n.children) walk(n.children);
     }
   };
@@ -49,13 +50,32 @@ async function getBookmarks(): Promise<Bookmark[]> {
   return (bookmarkCache = out);
 }
 
-const tabResult = (t: chrome.tabs.Tab): Result => ({
+/**
+ * A tab's title. Tabs that haven't loaded since the browser started (e.g. restored pinned
+ * ones) have none, or their URL, so fall back to what's already in memory: the history
+ * index (never for incognito, and not loaded just for this: the first frame can't wait),
+ * then bookmarks, then the site's name.
+ */
+function tabTitle(t: chrome.tabs.Tab, s: Settings): string {
+  const url = t.url ?? '';
+  const bare = displayUrl(url).toLowerCase();
+  const real = (title?: string) => (title && displayUrl(title).toLowerCase() !== bare ? title : '');
+  return (
+    real(t.title) ||
+    (!t.incognito && sourceOn(s, 'history') && real(peekHistory()?.get(url)?.title)) ||
+    (sourceOn(s, 'bookmarks') && real(bookmarkCache?.find((b) => b.url === url)?.title)) ||
+    siteName(url)
+  );
+}
+
+const tabResult = (t: chrome.tabs.Tab, s: Settings): Result => ({
   kind: 'tab',
-  title: t.title || displayUrl(t.url ?? ''),
+  title: tabTitle(t, s),
   sub: displayUrl(t.url ?? ''),
   url: t.url ?? '',
   tabId: t.id,
   windowId: t.windowId,
+  pinned: t.pinned,
 });
 
 const pageResult = (kind: ResultKind, title: string, url: string): Result => ({
@@ -69,7 +89,7 @@ const pageResult = (kind: ResultKind, title: string, url: string): Result => ({
  * The tab the palette was opened from. Incognito and regular windows only see their own
  * tabs, and incognito doesn't search history.
  */
-export type From = Pick<chrome.tabs.Tab, 'id' | 'incognito'> | undefined;
+export type From = Pick<chrome.tabs.Tab, 'id' | 'incognito' | 'url'> | undefined;
 
 /** Open tabs on the same side of the incognito boundary as `from`, except `from` itself. */
 async function sameSideTabs(from: From): Promise<chrome.tabs.Tab[]> {
@@ -77,11 +97,18 @@ async function sameSideTabs(from: From): Promise<chrome.tabs.Tab[]> {
   return (await chrome.tabs.query({})).filter((t) => t.incognito === incognito && t.id !== from?.id);
 }
 
-async function recentTabs(from: From): Promise<Result[]> {
-  return (await sameSideTabs(from))
-    .sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))
+/** Tabs of the kinds the settings leave on. */
+async function shownTabs(from: From, settings: Settings): Promise<chrome.tabs.Tab[]> {
+  return (await sameSideTabs(from)).filter((t) => sourceOn(settings, t.pinned ? 'pinned' : 'tabs'));
+}
+
+const newest = (a: chrome.tabs.Tab, b: chrome.tabs.Tab) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0);
+
+async function recentTabs(from: From, settings: Settings): Promise<Result[]> {
+  return (await shownTabs(from, settings))
+    .sort(newest)
     .slice(0, MAX_RESULTS)
-    .map(tabResult);
+    .map((t) => tabResult(t, settings));
 }
 
 /** The default action for the typed text: open it as a URL, or search the web. */
@@ -106,20 +133,29 @@ async function withIcons(results: Result[], from: From): Promise<Result[]> {
   await Promise.all(
     results.map(async (r) => {
       const keep = !from?.incognito || r.kind === 'bookmark';
-      if (r.kind !== 'search' && r.kind !== 'chrome' && r.kind !== 'options') r.icon = await favicon(r.url, keep);
+      if (r.kind !== 'search' && r.kind !== 'chrome' && r.kind !== 'options' && r.kind !== 'scope' && r.kind !== 'note') r.icon = await favicon(r.url, keep);
     }),
   );
   return results;
 }
 
+/** The newest history, straight from the browser: cheap with no text, and not waiting on (or stale from) the index. */
+async function newestHistory(from: From): Promise<Result[]> {
+  const found = await chrome.history.search({ text: '', startTime: 0, maxResults: MAX_RESULTS * 2 });
+  return found
+    .filter((h): h is chrome.history.HistoryItem & { url: string } => !!h.url && !isOwnPage(h.url) && h.url !== from?.url)
+    .slice(0, MAX_RESULTS)
+    .map((h) => pageResult('history', h.title ?? '', h.url));
+}
+
 /** Results for an empty query: the most recently used tabs. */
-export async function recent(from: From): Promise<Result[]> {
-  return withIcons(await recentTabs(from), from);
+export async function recent(from: From, settings: Settings): Promise<Result[]> {
+  return withIcons(await recentTabs(from, settings), from);
 }
 
 /** `withTabs: false` leaves open tabs out, for editing the page's URL: Enter changes the page there. */
-export async function search(text: string, settings: Settings, from: From, withTabs = true): Promise<Omit<QueryResponse, 'id'>> {
-  const ranked = await rank(text, settings, from, withTabs);
+export async function search(text: string, settings: Settings, from: From, withTabs = true, scope?: ScopeKey): Promise<Omit<QueryResponse, 'id'>> {
+  const ranked = await rank(text, settings, from, withTabs, scope);
   return { ...ranked, results: await withIcons(ranked.results, from) };
 }
 
@@ -128,10 +164,10 @@ export async function search(text: string, settings: Settings, from: From, withT
  * all history (tens of ms on large profiles), so the palette asks for it separately
  * and appends the results below the ones already shown.
  */
-export async function searchOlder(text: string, exclude: string[], from: From): Promise<Result[]> {
+export async function searchOlder(text: string, exclude: string[], from: From, settings: Settings): Promise<Result[]> {
   const q = normalize(text);
   const slots = MAX_RESULTS - exclude.length;
-  if (!q || slots <= 0 || from?.incognito) return [];
+  if (!q || slots <= 0 || from?.incognito || !sourceOn(settings, 'history')) return [];
   const shown = new Set(exclude);
   const found = (await chrome.history.search({ text: q, startTime: 0, maxResults: 20 }))
     .filter((h): h is chrome.history.HistoryItem & { url: string } => !!h.url && !shown.has(h.url) && !isOwnPage(h.url))
@@ -141,17 +177,36 @@ export async function searchOlder(text: string, exclude: string[], from: From): 
   return withIcons(found.map(({ h }) => pageResult('history', h.title ?? '', h.url)), from);
 }
 
-async function rank(text: string, settings: Settings, from: From, withTabs = true): Promise<Omit<QueryResponse, 'id'>> {
+/** `scope` narrows the search to one source: nothing else is searched, and there's no search or options row. */
+async function rank(text: string, settings: Settings, from: From, withTabs = true, scope?: ScopeKey): Promise<Omit<QueryResponse, 'id'>> {
   const q = normalize(text);
-  if (!q) return { results: withTabs ? await recentTabs(from) : [], more: false };
+  // A shortcut can open a scope whose source is turned off: say so, instead of an empty list.
+  // (Incognito never shows history, but a shortcut can still ask for it.)
+  if (scope === 'history' && from?.incognito) return { results: [{ kind: 'note', title: 'History is not searched in incognito', sub: '', url: '' }] };
+  if (scope && !(scope === 'tabs' ? sourceOn(settings, 'tabs') || sourceOn(settings, 'pinned') : sourceOn(settings, scope))) {
+    return { results: [{ kind: 'note', title: `${SCOPES[scope]} is disabled in Float options`, sub: '', url: '' }] };
+  }
+  if (!q && !scope) return { results: withTabs ? await recentTabs(from, settings) : [], more: false };
 
   const incognito = !!from?.incognito;
+  const inScope = (key: ScopeKey) => !scope || scope === key;
+  const showHistory = !incognito && sourceOn(settings, 'history') && inScope('history');
   const [tabs, bookmarks, history, bang] = await Promise.all([
-    withTabs ? sameSideTabs(from) : [],
-    getBookmarks(),
-    incognito ? new Map<string, HistoryEntry>() : getHistory(),
-    settings.bangs ? findBang(text).catch(() => null) : null,
+    withTabs && inScope('tabs') ? shownTabs(from, settings) : [],
+    sourceOn(settings, 'bookmarks') && inScope('bookmarks') ? getBookmarks() : [],
+    showHistory && q ? getHistory() : new Map<string, HistoryEntry>(),
+    !scope && settings.bangs ? findBang(text).catch(() => null) : null,
   ]);
+  // Nothing typed yet: the newest of the source.
+  if (!q) {
+    const results =
+      scope === 'tabs'
+        ? tabs.sort(newest).slice(0, MAX_RESULTS).map((t) => tabResult(t, settings))
+        : scope === 'bookmarks'
+          ? [...bookmarks].sort((a, b) => b.added - a.added).slice(0, MAX_RESULTS).map((b) => pageResult('bookmark', b.title, b.url))
+          : await newestHistory(from);
+    return { results, more: false };
+  }
   // A leading bang is a mode (the palette shows it as a chip): its search is the only row.
   if (bang?.leading) return { results: [bangRow(bang, text.trim())], bang: { trigger: bang.trigger, name: bang.name } };
 
@@ -175,12 +230,12 @@ async function rank(text: string, settings: Settings, from: From, withTabs = tru
 
   for (const tab of tabs) {
     if (!tab.url) continue;
-    add(tab.url, (tab.title ?? '').toLowerCase(), displayUrl(tab.url).toLowerCase(), 1.1, () => tabResult(tab));
+    add(tab.url, tabTitle(tab, settings).toLowerCase(), displayUrl(tab.url).toLowerCase(), 1.1, () => tabResult(tab, settings));
   }
 
   const page = q.replace(/^(chrome:\/\/|about:)/, '');
   const explicit = page !== q;
-  for (const name of CHROME_PAGES) {
+  for (const name of !scope && sourceOn(settings, 'chrome') ? CHROME_PAGES : []) {
     const url = `chrome://${name}`;
     // Only an exact name (or an explicit chrome:// prefix) outranks a web search.
     add(url, name, url, 1.05, () => ({ kind: 'chrome', title: name, sub: url, url }), { promotable: false });
@@ -189,12 +244,20 @@ async function rank(text: string, settings: Settings, from: From, withTabs = tru
   }
 
   // Just below the best matching chrome page, so `settings` finds chrome://settings first.
-  const options = Math.max(...OPTIONS_NAMES.map((n) => score(q, n)));
+  const options = scope ? 0 : Math.max(...OPTIONS_NAMES.map((n) => score(q, n)));
   if (options) {
     let best = 0;
     for (const name of CHROME_PAGES) best = Math.max(best, byUrl.get(`chrome://${name}`)?.score ?? 0);
-    const result: Result = { kind: 'options', title: 'Float options', sub: 'Settings', url: '' };
+    const result: Result = { kind: 'options', title: 'Float options', sub: '', url: '' };
     byUrl.set(OPTIONS_KEY, { result, score: best ? Math.min(options, best - 0.001) : options, promote: false });
+  }
+
+  // Rows that enter a scope ("Search history"), for the sources that are on.
+  const offered = { tabs: withTabs && (sourceOn(settings, 'tabs') || sourceOn(settings, 'pinned')), bookmarks: sourceOn(settings, 'bookmarks'), history: !incognito && sourceOn(settings, 'history') };
+  for (const key of scope ? [] : (Object.keys(SCOPES) as ScopeKey[])) {
+    const name = SCOPES[key].toLowerCase();
+    const s = offered[key] ? Math.max(score(q, `search ${name}`), score(q, name)) : 0;
+    if (s) byUrl.set(`float:scope:${key}`, { result: { kind: 'scope', title: `Search ${name}`, sub: '', url: key }, score: s * 0.9, promote: false });
   }
 
   for (const b of bookmarks) add(b.url, b.t, b.d, 1.05, () => pageResult('bookmark', b.title, b.url));
@@ -205,11 +268,14 @@ async function rank(text: string, settings: Settings, from: From, withTabs = tru
     add(h.url, h.t, h.d, 1, () => pageResult('history', h.title, h.url), { bonus: frecency, promotable: 'url' });
   }
 
-  const ranked = [...byUrl.values()].sort((a, b) => b.score - a.score).slice(0, MAX_RESULTS - 1);
+  // The search or open row takes one slot, except in a scope.
+  const limit = scope ? MAX_RESULTS : MAX_RESULTS - 1;
+  const ranked = [...byUrl.values()].sort((a, b) => b.score - a.score).slice(0, limit);
   const results = ranked.map((c) => c.result);
   // A bang is an explicit choice of action, so nothing outranks it.
+  if (scope) return { results, more: showHistory && ranked.length < limit };
   if (bang) results.unshift(bangRow(bang, text.trim()));
   else results.splice(ranked[0]?.promote ? 1 : 0, 0, actionRow(text.trim(), settings));
-  // `more` asks for older history, which incognito doesn't search.
-  return { results, more: !incognito && ranked.length < MAX_RESULTS - 1 };
+  // `more` asks for older history, which incognito (and turning history off) doesn't search.
+  return { results, more: showHistory && ranked.length < limit };
 }

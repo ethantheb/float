@@ -23,7 +23,10 @@
     "open-palette-url": {
       "suggested_key": { "default": "Alt+L" },
       "description": "Edit the current page's URL in the palette"
-    }
+    },
+    "search-tabs": { "description": "Search tabs" },
+    "search-bookmarks": { "description": "Search bookmarks" },
+    "search-history": { "description": "Search history" }
   },
   "chrome_url_overrides": { "newtab": "palette.html" },
   "options_ui": { "page": "options.html", "open_in_tab": true },

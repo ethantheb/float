@@ -1,6 +1,10 @@
 export const COLOR_KEYS = ['bg', 'fg', 'muted', 'border', 'selected', 'accent'] as const;
 export type ColorKey = (typeof COLOR_KEYS)[number];
 
+/** The kinds of results the palette can show. Pinned tabs are separate from other tabs. */
+export const SOURCE_KEYS = ['tabs', 'pinned', 'bookmarks', 'history', 'chrome'] as const;
+export type SourceKey = (typeof SOURCE_KEYS)[number];
+
 export interface Settings {
   /** Opened when the palette can't be shown on the current page. Empty = built-in palette page. */
   fallbackUrl: string;
@@ -16,12 +20,16 @@ export interface Settings {
   theme: 'auto' | 'dark' | 'light';
   /** CSS color overrides. Empty values use the theme default. */
   colors: Partial<Record<ColorKey, string>>;
+  /** Which kinds of results appear. A source that isn't listed is on. */
+  sources: Partial<Record<SourceKey, boolean>>;
 }
+
+export const sourceOn = (s: Settings, key: SourceKey): boolean => s.sources?.[key] !== false;
 
 /** localStorage key mirroring settings, so extension pages apply the theme before first paint. */
 export const SETTINGS_CACHE = 'float-settings';
 
-export const DEFAULTS: Settings = { fallbackUrl: '', searchUrl: '', bangs: true, newTab: 'float', newTabUrl: '', focusNewTab: true, theme: 'auto', colors: {} };
+export const DEFAULTS: Settings = { fallbackUrl: '', searchUrl: '', bangs: true, newTab: 'float', newTabUrl: '', focusNewTab: true, theme: 'auto', colors: {}, sources: {} };
 
 export async function loadSettings(): Promise<Settings> {
   return (await chrome.storage.sync.get(DEFAULTS)) as Settings;

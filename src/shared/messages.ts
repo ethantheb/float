@@ -1,7 +1,11 @@
+/** The sources the palette can be narrowed to (a chip in the bar), with their names. */
+export const SCOPES = { tabs: 'Tabs', bookmarks: 'Bookmarks', history: 'History' } as const;
+export type ScopeKey = keyof typeof SCOPES;
+
 /** Favicon size in pixels (16px at up to 2x). */
 export const ICON_PX = 32;
 
-export type ResultKind = 'tab' | 'bookmark' | 'history' | 'chrome' | 'url' | 'search' | 'options' | 'setting';
+export type ResultKind = 'tab' | 'bookmark' | 'history' | 'chrome' | 'url' | 'search' | 'options' | 'setting' | 'scope' | 'note';
 
 /** Editing a setting's text in the bar. */
 export interface SettingEdit {
@@ -48,6 +52,8 @@ export interface Result {
   icon?: string;
   tabId?: number;
   windowId?: number;
+  /** For a `tab` result: the tab is pinned. */
+  pinned?: boolean;
   setting?: Setting;
 }
 
@@ -57,7 +63,7 @@ export type Where = 'new' | 'current';
 export type Message =
   // palette -> SW, answered with QueryResponse; `options` lists settings (or `menu`'s) instead,
   // `replace` (editing the page's URL) leaves out open tabs
-  | { type: 'query'; id: number; text: string; options?: boolean; menu?: string; replace?: boolean }
+  | { type: 'query'; id: number; text: string; options?: boolean; menu?: string; replace?: boolean; scope?: ScopeKey }
   | { type: 'older'; id: number; text: string; exclude: string[] } // palette -> SW, answered with QueryResponse
   | { type: 'open'; result: Result; where: Where } // palette -> SW
   | { type: 'set'; key: string; step?: number; value?: string } // palette -> SW, answered once saved
@@ -65,8 +71,8 @@ export type Message =
   // SW -> content script / palette page (answered with true). Carry the empty-query
   // results so the palette is complete in its first visible frame.
   // `edit`: the page's URL, to edit; Enter then changes the page.
-  | { type: 'toggle'; results: Result[]; zoom: number; edit?: string }
-  | { type: 'focus'; tabId: number; results: Result[] };
+  | { type: 'toggle'; results: Result[]; zoom: number; edit?: string; scope?: ScopeKey }
+  | { type: 'focus'; tabId: number; results: Result[]; scope?: ScopeKey };
 
 export interface QueryResponse {
   id: number;

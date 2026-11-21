@@ -1,11 +1,12 @@
 import { normalize, score } from '../shared/fuzzy';
 import { SCOPES, type QueryResponse, type Result, type ResultKind, type ScopeKey } from '../shared/messages';
-import { sourceOn, type Settings } from '../shared/settings';
+import { sourceListed, sourceOn, type Settings } from '../shared/settings';
 import { findBang, type BangMatch } from './bangs';
 import { CHROME_PAGES } from './chromePages';
 import { favicon } from './favicons';
 import { getHistory, peekHistory, type HistoryEntry } from './history';
-import { displayUrl, hostOf, isOwnPage, siteName, toUrl } from './url';
+import { knownSiteName } from './siteNames';
+import { displayUrl, hostOf, isOwnPage, toUrl } from './url';
 
 const MAX_RESULTS = 8;
 const OPTIONS_KEY = 'float:options';
@@ -50,27 +51,35 @@ async function getBookmarks(): Promise<Bookmark[]> {
   return (bookmarkCache = out);
 }
 
+const unloaded = (t: chrome.tabs.Tab) => !!t.discarded || t.status === 'unloaded';
+/** `title` if it's a real title, not empty or just the URL or its host. */
+function realTitle(title: string | undefined, url: string): string {
+  const t = displayUrl(title ?? '').toLowerCase();
+  return t && t !== displayUrl(url).toLowerCase() && t !== hostOf(url).toLowerCase() && t !== hostOf(url).replace(/:\d+$/, '').toLowerCase() ? title! : '';
+}
+
 /**
  * A tab's title. Tabs that haven't loaded since the browser started (e.g. restored pinned
- * ones) have none, or their URL, so fall back to what's already in memory: the history
- * index (never for incognito, and not loaded just for this: the first frame can't wait),
- * then bookmarks, then the site's name.
+ * ones) may have none, or their URL, so for those (only) fall back to: the history index
+ * (only if already in memory: the first frame can't wait; never for incognito), bookmarks,
+ * a well-known site's name, then the URL.
  */
 function tabTitle(t: chrome.tabs.Tab, s: Settings): string {
   const url = t.url ?? '';
-  const bare = displayUrl(url).toLowerCase();
-  const real = (title?: string) => (title && displayUrl(title).toLowerCase() !== bare ? title : '');
+  // A loaded tab's title is what the tab strip shows, even when it's just the domain.
+  if (!unloaded(t)) return t.title || displayUrl(url);
   return (
-    real(t.title) ||
-    (!t.incognito && sourceOn(s, 'history') && real(peekHistory()?.get(url)?.title)) ||
-    (sourceOn(s, 'bookmarks') && real(bookmarkCache?.find((b) => b.url === url)?.title)) ||
-    siteName(url)
+    realTitle(t.title, url) ||
+    (!t.incognito && sourceOn(s, 'history') && realTitle(peekHistory()?.get(url)?.title, url)) ||
+    (sourceOn(s, 'bookmarks') && realTitle(bookmarkCache?.find((b) => b.url === url)?.title, url)) ||
+    knownSiteName(url) ||
+    displayUrl(url)
   );
 }
 
-const tabResult = (t: chrome.tabs.Tab, s: Settings): Result => ({
+const tabResult = (t: chrome.tabs.Tab, s: Settings, title = tabTitle(t, s)): Result => ({
   kind: 'tab',
-  title: tabTitle(t, s),
+  title,
   sub: displayUrl(t.url ?? ''),
   url: t.url ?? '',
   tabId: t.id,
@@ -104,8 +113,10 @@ async function shownTabs(from: From, settings: Settings): Promise<chrome.tabs.Ta
 
 const newest = (a: chrome.tabs.Tab, b: chrome.tabs.Tab) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0);
 
+/** The empty-query list: tabs whose source is listed, not only searched ('typed'). */
 async function recentTabs(from: From, settings: Settings): Promise<Result[]> {
   return (await shownTabs(from, settings))
+    .filter((t) => sourceListed(settings, t.pinned ? 'pinned' : 'tabs'))
     .sort(newest)
     .slice(0, MAX_RESULTS)
     .map((t) => tabResult(t, settings));
@@ -230,7 +241,8 @@ async function rank(text: string, settings: Settings, from: From, withTabs = tru
 
   for (const tab of tabs) {
     if (!tab.url) continue;
-    add(tab.url, tabTitle(tab, settings).toLowerCase(), displayUrl(tab.url).toLowerCase(), 1.1, () => tabResult(tab, settings));
+    const title = tabTitle(tab, settings);
+    add(tab.url, title.toLowerCase(), displayUrl(tab.url).toLowerCase(), 1.1, () => tabResult(tab, settings, title));
   }
 
   const page = q.replace(/^(chrome:\/\/|about:)/, '');

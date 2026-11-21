@@ -20,6 +20,8 @@ const syncHistoryIfUsed = () =>
       if (sourceOn(s, 'history')) return syncHistory();
     })
     .catch(() => {});
+/** The palette just opened: catch up history while the user starts typing. */
+const catchUp = syncHistoryIfUsed;
 onSettingsChanged(() => {
   settings = null;
 });
@@ -48,7 +50,11 @@ async function showPalette(tab?: chrome.tabs.Tab, editUrl = false, scope?: Scope
   const url = tab.url || tab.pendingUrl || '';
   // Incognito's new tab page is the browser's own: overrides don't apply there.
   const ownPage = isOwnPage(url) || (url.startsWith('chrome://newtab') && !tab.incognito);
-  if (editUrl && url && !ownPage) asked.set('edit', url);
+  // `tab`: the fallback page then changes this tab, not itself.
+  if (editUrl && url && !ownPage) {
+    asked.set('edit', url);
+    asked.set('tab', String(tabId));
+  }
   if (!ownPage && RESTRICTED.test(url)) return openFallback(tab, asked);
   const edit = editUrl && !ownPage ? url : undefined;
 
@@ -59,8 +65,6 @@ async function showPalette(tab?: chrome.tabs.Tab, editUrl = false, scope?: Scope
       ? getSettings().then((s) => search('', s, tab, true, scope)).then((r) => r.results)
       : getSettings().then((s) => recent(tab, s));
   const [results, zoom] = await Promise.all([firstResults, chrome.tabs.getZoom(tabId).catch(() => 1)]);
-  // Catch up history while the user starts typing (queued behind the message).
-  const catchUp = syncHistoryIfUsed;
 
   // Our own new tab / fallback page: just refocus its palette.
   if (ownPage) {
@@ -114,8 +118,8 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
     return true;
   }
   if (msg.type === 'query') {
-    // An empty query means the palette just opened: catch up history while the user starts typing.
-    if (!msg.text.trim()) syncHistoryIfUsed();
+    // An empty query means the palette just opened.
+    if (!msg.text.trim()) catchUp();
     getSettings()
       .then((s) => search(msg.text, s, sender.tab, !msg.replace, msg.scope))
       .then((res) => sendResponse({ id: msg.id, ...res } satisfies QueryResponse))
@@ -134,7 +138,7 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
     return true;
   }
   if (msg.type === 'open') {
-    void open(msg.result, msg.where, sender);
+    void open(msg.result, msg.where, sender, msg.tabId);
     sendResponse(true);
   }
   return false;
@@ -161,7 +165,8 @@ async function closePalettePage(tab?: chrome.tabs.Tab): Promise<boolean> {
   return true;
 }
 
-async function open(result: Result, where: Where, sender: chrome.runtime.MessageSender): Promise<void> {
+/** `editTab`: the tab the fallback page is editing, changed instead of the page; then the page closes. */
+async function open(result: Result, where: Where, sender: chrome.runtime.MessageSender, editTab?: number): Promise<void> {
   const from = sender.tab;
   const fromPalettePage = !!sender.url?.startsWith(PALETTE_URL);
 
@@ -173,17 +178,27 @@ async function open(result: Result, where: Where, sender: chrome.runtime.Message
     return;
   }
 
-  const current = where === 'current' && from?.id != null ? from.id : undefined;
+  // It may have been closed since: then the page changes itself.
+  const edited = where === 'current' && editTab != null ? await chrome.tabs.get(editTab).catch(() => null) : null;
+  const current = edited?.id ?? (where === 'current' && from?.id != null ? from.id : undefined);
+  await go(result, current, from?.windowId);
+  if (edited?.id != null) {
+    await chrome.tabs.update(edited.id, { active: true });
+    if (fromPalettePage && from?.id != null) await chrome.tabs.remove(from.id);
+  }
+}
+
+async function go(result: Result, current: number | undefined, windowId: number | undefined): Promise<void> {
   if (result.kind === 'search') {
-    if (result.target && isWebUrl(result.target)) return navigate(result.target, current, from?.windowId);
+    if (result.target && isWebUrl(result.target)) return navigate(result.target, current, windowId);
     const { searchUrl } = await getSettings();
     if (!searchUrl) {
       await chrome.search.query(current != null ? { text: result.url, tabId: current } : { text: result.url, disposition: 'NEW_TAB' });
       return;
     }
-    return navigate(searchUrl.replace('%s', encodeURIComponent(result.url)), current, from?.windowId);
+    return navigate(searchUrl.replace('%s', encodeURIComponent(result.url)), current, windowId);
   }
-  return navigate(result.url, current, from?.windowId);
+  return navigate(result.url, current, windowId);
 }
 
 async function navigate(url: string, tabId: number | undefined, windowId: number | undefined): Promise<void> {

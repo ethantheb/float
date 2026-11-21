@@ -1,4 +1,7 @@
 import { req } from '../lib/registry.mjs';
+import { bare as bareUrl, discard } from '../lib/helpers.mjs';
+
+const displayOf = bareUrl;
 
 // The palette page lists the same results as the overlay, and is the easiest place to test search.
 
@@ -91,17 +94,56 @@ req('R303', 'A page that is both open and in history or bookmarks is listed once
   t.equal(rows.filter((r) => r.title === 'Dup' && r.badge === 'Switch to Tab').length, 1, 'the open page is the tab row');
 });
 
-req('R304', 'A tab whose title is empty or just its URL, with no title known from history or bookmarks, is titled with its site\'s name.', async (t) => {
+req('R304', 'An unloaded or discarded tab whose title is empty or just its URL or host, at no well-known site and with no title known from history or bookmarks, is titled with its URL.', async (t) => {
   const bare = await t.open(t.server.url('/untitled'));
   await t.open(t.server.url('/p/Fancy'));
-  const tab = await t.evalSw((id) => chrome.tabs.get(id), bare.tabId);
+  // Only tabs that aren't loaded get a fallback title (see R322).
+  const tab = await discard(t, bare.tabId);
   t.match(tab.title, /^$|example\.test.*\/untitled/, 'the browser gives this tab no real title');
   const v = await t.palettePage();
   const rows = await ask(v, 'example');
   // Control: a titled tab shows its title.
   t.includes(titlesOf(rows), 'Fancy');
-  const named = rows.find((r) => r.sub.endsWith('/untitled'));
-  t.equal(named?.title, 'Example');
+  // The subtitle is hidden when it repeats the title.
+  const named = rows.find((r) => r.badge === 'Switch to Tab' && [r.title, r.sub].some((x) => x.endsWith('/untitled')));
+  t.equal(named?.title, bareUrl(t.server.url('/untitled')));
+});
+
+req('R322', 'A loaded tab is titled as the browser titles it, even when that is just its URL or domain; only unloaded or discarded tabs get a fallback title.', async (t) => {
+  const bare = await t.open(t.server.url('/untitled'));
+  await t.evalSw((u) => chrome.bookmarks.create({ title: 'Bookmarked', url: u }), t.server.url('/untitled'));
+  await t.open(t.server.url('/p/Fancy'));
+  const v = await t.palettePage();
+  // The subtitle is hidden when it repeats the title.
+  const row = async (text) => (await ask(v, text)).find((r) => r.badge === 'Switch to Tab' && [r.title, r.sub].some((x) => x.endsWith('/untitled')));
+  const loaded = await t.evalSw((id) => chrome.tabs.get(id), bare.tabId);
+  t.equal(loaded.status, 'complete', 'the tab is loaded');
+  t.equal((await row('untitle'))?.title, loaded.title || loaded.url.replace(/^https?:\/\//, ''), "loaded: the browser's own title");
+  await discard(t, bare.tabId);
+  t.equal((await row('untitled'))?.title, 'Bookmarked', "discarded: the fallback, the bookmark's title");
+});
+
+req('R323', "An unloaded or discarded tab at a well-known site, with no title of its own or from history or bookmarks, is titled with the site's name, such as Gmail for mail.google.com.", async (t) => {
+  // Makes an untitled background tab at `url`, optionally bookmarked as `bookmark`, then discards it.
+  const untitledTab = async (url, bookmark) => {
+    const { id } = await t.evalSw((u) => chrome.tabs.create({ url: u, active: false }), url);
+    const loaded = await t.waitFor(async () => {
+      const tab = await t.evalSw((i) => chrome.tabs.get(i), id);
+      return tab.status === 'complete' && tab;
+    }, { what: `${url} to load` });
+    if (bookmark) await t.evalSw((ti, u) => chrome.bookmarks.create({ title: ti, url: u }), bookmark, loaded.url);
+    return discard(t, id);
+  };
+  const other = await untitledTab(t.server.url('/untitled'));
+  const gmail = await untitledTab(`http://mail.google.com:${t.server.port}/untitled`);
+  const marked = await untitledTab(`http://mail.google.com:${t.server.port}/untitled/marked`, 'Inbox (3)');
+  const v = await t.palettePage();
+  const rows = (await ask(v, 'untitled')).filter((r) => r.badge === 'Switch to Tab');
+  // The subtitle is hidden when it repeats the title.
+  const titleOf = (tab) => rows.find((r) => r.sub === displayOf(tab.url) || (r.sub === '' && r.title === displayOf(tab.url)))?.title;
+  t.equal(titleOf(other), displayOf(other.url), 'control: another site is titled with its URL');
+  t.equal(titleOf(gmail), 'Gmail');
+  t.equal(titleOf(marked), 'Inbox (3)', 'a bookmark title comes first: the name is only a fallback');
 });
 
 req('R305', 'A pinned tab shows a pin icon over its favicon, and its badge still says "Switch to Tab".', async (t) => {

@@ -108,7 +108,8 @@ function mount(): void {
     // The fallback page can be asked for a scope, or to edit a URL (see openFallback).
     const asked = new URLSearchParams(location.search);
     const scope = asked.get('scope');
-    palette.open(undefined, asked.get('edit') ?? undefined, scope && Object.hasOwn(SCOPES, scope) ? (scope as ScopeKey) : undefined);
+    const tab = Number(asked.get('tab'));
+    palette.open(undefined, asked.get('edit') ?? undefined, scope && Object.hasOwn(SCOPES, scope) ? (scope as ScopeKey) : undefined, Number.isInteger(tab) && tab > 0 ? tab : undefined);
   }
 
   // The shortcut pressed while this page is active refocuses it instead of opening another tab.

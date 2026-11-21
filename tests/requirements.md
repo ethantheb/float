@@ -53,7 +53,7 @@ One behavior per row, in the form the user would see it. Status is exactly `auto
 | R301 | Typed words match tabs, bookmarks and history by title or URL; every word must match, in any order. | auto |
 | R302 | A typed abbreviation of three or more letters matches letters in order, so `gthb` finds github.com. | auto |
 | R303 | A page that is both open and in history or bookmarks is listed once, as the tab. | auto |
-| R304 | A tab whose title is empty or just its URL, with no title known from history or bookmarks, is titled with its site's name. | auto |
+| R304 | An unloaded or discarded tab whose title is empty or just its URL or host, at no well-known site and with no title known from history or bookmarks, is titled with its URL. | auto |
 | R305 | A pinned tab shows a pin icon over its favicon, and its badge still says "Switch to Tab". | auto |
 | R306 | An open tab at `https://a..com/` does not stop the palette from opening or searching. | auto |
 | R307 | A long title or URL is cut with an ellipsis, the URL first, and neither overlaps the "Switch to Tab" badge. | auto |
@@ -71,6 +71,8 @@ One behavior per row, in the form the user would see it. Status is exactly `auto
 | R319 | Typing `settings` lists Float options, below chrome://settings. | auto |
 | R320 | The Float options row shows only its title, with no secondary text. | auto |
 | R321 | Older history that arrives late is added below the rows already shown, which never move. | manual |
+| R322 | A loaded tab is titled as the browser titles it, even when that is just its URL or domain; only unloaded or discarded tabs get a fallback title. | auto |
+| R323 | An unloaded or discarded tab at a well-known site, with no title of its own or from history or bookmarks, is titled with the site's name, such as Gmail for mail.google.com. | auto |
 
 ## Bangs (R4xx)
 
@@ -110,6 +112,8 @@ One behavior per row, in the form the user would see it. Status is exactly `auto
 | R606 | In incognito, the history scope shows `History is not searched in incognito` and never regular history. | auto |
 | R607 | Incognito windows never search history, and incognito tabs never take their titles from it. | manual |
 | R608 | Favicons for incognito tabs are never cached, so they don't outlive the window; bookmark favicons are still cached. | manual |
+| R609 | Tabs and Pinned tabs step through On, When typed and Off; Bookmarks, History and Browser pages toggle On and Off. | auto |
+| R610 | A tab source set to When typed is left out of the list shown with nothing typed, but its tabs are still found by typing and listed in the tabs scope. | auto |
 
 ## Options (R7xx)
 
@@ -144,6 +148,7 @@ One behavior per row, in the form the user would see it. Status is exactly `auto
 | R905 | The fallback page opened with `edit=<url>` starts with that URL in the bar and no tab results. | auto |
 | R906 | The edit-URL command on one of Float's own pages refocuses that palette in normal mode and opens no tab. | auto |
 | R907 | In incognito, the fallback opens the browser's new tab page, or a website Fallback URL. | manual |
+| R908 | On the fallback page opened by the edit-URL command on a browser page, Enter changes that browser page's tab, switches to it, and closes the fallback page. | auto |
 
 ## Constraints (Cxx)
 

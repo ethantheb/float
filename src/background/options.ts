@@ -7,6 +7,10 @@ import { displayUrl, hostOf, isWebUrl, toUrl } from './url';
 type Choices<T extends string> = readonly (readonly [T, string])[];
 const THEMES: Choices<Settings['theme']> = [['auto', 'Follow browser'], ['dark', 'Dark'], ['light', 'Light']];
 const NEW_TABS: Choices<Settings['newTab']> = [['float', 'Float'], ['browser', 'Browser default'], ['url', 'Custom URL']];
+/** Tab sources can also be searched without being listed while nothing is typed. */
+const TAB_SOURCE: Choices<'on' | 'typed' | 'off'> = [['on', 'On'], ['typed', 'When typed'], ['off', 'Off']];
+const tabSourceState = (s: Settings, key: SourceKey) => (!sourceOn(s, key) ? 'off' : s.sources[key] === 'typed' ? 'typed' : 'on');
+const isTabSource = (key: SourceKey) => key === 'tabs' || key === 'pinned';
 
 const nameOf = <T extends string>(list: Choices<T>, v: T) => list.find(([k]) => k === v)?.[1] ?? v;
 const step = <T extends string>(list: Choices<T>, v: T, by: number) =>
@@ -56,6 +60,14 @@ function colorRows(s: Settings) {
 function sourceRows(s: Settings) {
   return SOURCE_KEYS.map((key) => {
     const [name, help] = SOURCES[key];
+    if (isTabSource(key)) {
+      return row(name, 'search results show hide source typed match', {
+        key: `sources.${key}`,
+        control: 'choice',
+        value: nameOf(TAB_SOURCE, tabSourceState(s, key)),
+        help: `${help} When typed: only shown when what you type matches them, not listed when the palette opens. Off leaves them out of the palette's results.`,
+      });
+    }
     return row(name, 'search results show hide source', {
       key: `sources.${key}`,
       control: 'toggle',
@@ -78,6 +90,7 @@ export async function optionRows(text: string, s: Settings, menu?: string): Prom
   const fallbackNote = incognito && !(fallback && isWebUrl(fallback)) ? " In incognito, the browser's new tab page opens instead." : '';
   const custom = COLOR_KEYS.filter((k) => s.colors[k]).length;
   const hidden = SOURCE_KEYS.filter((k) => !sourceOn(s, k)).length;
+  const typed = SOURCE_KEYS.filter((k) => s.sources[k] === 'typed').length;
   const rows = menu === 'colors' ? colorRows(s) : menu === 'sources' ? sourceRows(s) : [
     row('Shortcut', 'keyboard key binding hotkey ctrl', {
       key: 'shortcut',
@@ -143,7 +156,7 @@ export async function optionRows(text: string, s: Settings, menu?: string): Prom
       key: 'sources',
       control: 'menu',
       label: 'Sources',
-      value: hidden ? `${hidden} off` : 'All on',
+      value: hidden ? `${hidden} off` : typed ? `${typed} when typed` : 'All on',
       help: 'Choose what the palette searches: tabs, pinned tabs, bookmarks, history, and browser pages.',
     }),
     row('Bangs', 'bang ! shortcut keyword helium duckduckgo kagi', {
@@ -177,7 +190,10 @@ export function applySetting(s: Settings, key: string, by = 1, value = ''): Sett
   else if (key === 'newTabUrl' || key === 'searchUrl' || key === 'fallbackUrl') next[key] = value.trim();
   else if (key.startsWith('sources.')) {
     const source = key.slice(8) as SourceKey;
-    next.sources[source] = !sourceOn(s, source);
+    if (isTabSource(source)) {
+      const state = step(TAB_SOURCE, tabSourceState(s, source), by);
+      next.sources[source] = state === 'on' || (state === 'off' ? false : 'typed');
+    } else next.sources[source] = !sourceOn(s, source);
   } else if (key.startsWith('colors.')) {
     const color = key.slice(7) as ColorKey;
     if (value.trim()) next.colors[color] = value.trim();

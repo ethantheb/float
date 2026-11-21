@@ -101,3 +101,31 @@ req('R906', 'The edit-URL command on one of Float\'s own pages refocuses that pa
   t.equal(await view.chip(), null);
   t.equal(await tabCount(t), n, 'no tab opened');
 });
+
+req('R908', "On the fallback page opened by the edit-URL command on a browser page, Enter changes that browser page's tab, switches to it, and closes the fallback page.", async (t) => {
+  const browser = await t.evalSw(() => chrome.tabs.create({ url: 'chrome://version', active: true }));
+  const browserUrl = await t.waitFor(() => t.evalSw((id) => chrome.tabs.get(id).then((x) => x.url), browser.id), { what: 'browser page url' });
+  const target = t.server.url('/p/Edited');
+  const tabOf = (query) => t.evalSw(async (q) => (await chrome.tabs.query({})).find((x) => x.url?.endsWith(`palette.html?${q}`))?.id, query);
+  const urlOf = (id) => t.evalSw((i) => chrome.tabs.get(i).then((x) => x.url || x.pendingUrl).catch(() => null), id);
+
+  // Control: without the tab to edit, the fallback page changes itself and the browser page stays.
+  const plainQuery = `fallback&${new URLSearchParams({ edit: browserUrl })}`;
+  const plain = await t.palettePage(plainQuery);
+  const plainId = await tabOf(plainQuery);
+  await plain.type(target);
+  await plain.press('Enter');
+  await t.waitFor(async () => (await urlOf(plainId)) === target, { what: 'the fallback page to navigate' });
+  t.equal(await urlOf(browser.id), browserUrl, 'control: the browser page is unchanged');
+
+  // Opened by the command: the browser page's tab changes, becomes active, and the fallback page closes.
+  const query = `fallback&${new URLSearchParams({ edit: browserUrl, tab: String(browser.id) })}`;
+  const view = await t.palettePage(query);
+  const pageId = await tabOf(query);
+  t.equal(await view.value(), browserUrl, "starts with the browser page's URL");
+  await view.type(target);
+  await view.press('Enter');
+  await t.waitFor(async () => (await urlOf(browser.id)) === target, { what: 'the browser page to navigate' });
+  await t.waitFor(async () => (await urlOf(pageId)) === null, { what: 'the fallback page to close' });
+  t.ok(await t.evalSw((id) => chrome.tabs.get(id).then((x) => x.active), browser.id), 'the edited tab is active');
+});

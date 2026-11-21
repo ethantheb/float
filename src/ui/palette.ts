@@ -113,6 +113,7 @@ export class Palette {
   #scope: ScopeKey | null = null;
   /** Opened to edit the page's URL: Enter changes this page instead of opening a tab. */
   #replace = false;
+  #editTab: number | undefined;
   /** What it was opened for: 'edit' (the page's URL), a scope, or ''. Esc out of a scope makes it ''. */
   get mode(): string {
     return this.#replace ? 'edit' : (this.#scope ?? '');
@@ -215,13 +216,15 @@ export class Palette {
   /**
    * Clears the input and focuses it. Renders `results` (the empty-query results sent
    * with the shortcut) synchronously, so they're in the first visible frame, or asks for them.
-   * `editUrl` starts with that URL selected, and Enter then changes the page.
+   * `editUrl` starts with that URL selected, and Enter then changes the page (or `editTab`,
+   * when the fallback page edits the browser page it was opened from).
    */
-  open(results?: Result[], editUrl?: string, scope?: ScopeKey): void {
+  open(results?: Result[], editUrl?: string, scope?: ScopeKey, editTab?: number): void {
     this.reset();
     if (scope) this.#setScope(scope);
     if (editUrl) {
       this.#replace = true;
+      this.#editTab = editTab;
       this.#input.value = editUrl;
     }
     if (results) this.#show(this.#sent, results);
@@ -258,6 +261,7 @@ export class Palette {
     this.#pendingEnter = null;
     this.#sent++;
     this.#replace = false;
+    this.#editTab = undefined;
     this.#setBang(null);
     this.#setScope(null);
     if (this.#options) this.#setMode(false);
@@ -589,7 +593,7 @@ export class Palette {
     // Setting links always open in a new tab.
     const newTab = !!s || stayByDefault === alt;
     const where: Where = newTab ? 'new' : 'current';
-    void send({ type: 'open', result, where });
+    void send({ type: 'open', result, where, tabId: this.#replace ? this.#editTab : undefined });
     if (!this.#opts.page) this.#opts.onClose(true);
   }
 }

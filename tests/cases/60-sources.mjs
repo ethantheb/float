@@ -1,6 +1,5 @@
-import { createServer } from 'node:http';
 import { req } from '../lib/registry.mjs';
-import { ask, flush, optionsPage, seen, selectRow, watch } from '../lib/helpers.mjs';
+import { ask, bare, discard, flush, optionsPage, seen, selectRow, titleOnce, watch } from '../lib/helpers.mjs';
 
 const bookmark = (t, title, url) => t.evalSw((ti, u) => chrome.bookmarks.create({ title: ti, url: u }), title, url);
 const visit = (t, url) => t.evalSw((u) => chrome.history.addUrl({ url: u }), url);
@@ -118,29 +117,21 @@ req('R604', 'Opening a scope whose source is off shows one dimmed row, `Tabs is 
   t.ok(true, 'Enter on a real row opens it');
 });
 
-/** A server whose pages have a title the first time they are fetched, and none after. */
-function titleOnce() {
-  const hits = new Map();
-  const server = createServer((request, res) => {
-    const n = (hits.get(request.url) ?? 0) + 1;
-    hits.set(request.url, n);
-    res.writeHead(200, { 'content-type': 'text/html' });
-    res.end(`<!doctype html><html><head>${n === 1 ? '<title>Remembered</title>' : ''}</head><body>x</body></html>`);
-  });
-  return new Promise((ok) => server.listen(0, '127.0.0.1', () => ok({ server, port: server.address().port })));
-}
-
 req('R605', 'With History off, tab titles are never taken from history; with Bookmarks off, never from bookmarks.', async (t) => {
-  const row = (rows, path) => rows.find((r) => r.badge === 'Switch to Tab' && r.sub.endsWith(path));
+  // The subtitle is hidden when it repeats the title.
+  const row = (rows, path) => rows.find((r) => r.badge === 'Switch to Tab' && [r.title, r.sub].some((x) => x.endsWith(path)));
 
   // Bookmarks: an untitled tab takes the bookmark's title, until Bookmarks is turned off.
   const untitled = t.server.url('/untitled');
-  await t.open(untitled);
+  const { tabId: untitledId } = await t.open(untitled);
   await bookmark(t, 'Bookmarked', untitled);
+  // Only tabs that aren't loaded get a fallback title.
+  await t.open(t.server.url('/p/Other'));
+  await discard(t, untitledId);
   const v = await t.palettePage();
   t.equal(row(await ask(v, 'untitle'), '/untitled')?.title, 'Bookmarked', 'titled from the bookmark while Bookmarks is on');
   await t.settings({ sources: { bookmarks: false } });
-  t.equal(row(await ask(v, 'untitled'), '/untitled')?.title, 'Example', 'titled by its site once Bookmarks is off');
+  t.equal(row(await ask(v, 'untitled'), '/untitled')?.title, bare(untitled), 'titled by its URL once Bookmarks is off');
 
   // History: the first visit stored the title, the second page load has none.
   const { server, port } = await titleOnce();
@@ -152,13 +143,15 @@ req('R605', 'With History off, tab titles are never taken from history; with Boo
     await t.waitFor(async () => (await historyTitle()) === 'Remembered', { what: 'history to learn the title' });
     await t.evalSw((id) => chrome.tabs.remove(id), first.tabId);
     const second = await t.open(url);
-    t.notEqual(await t.evalSw(async (id) => (await chrome.tabs.get(id)).title, second.tabId), 'Remembered', 'the open tab has no title of its own');
+    await t.open(t.server.url('/p/Other'));
+    const discarded = await discard(t, second.tabId);
+    t.notEqual(discarded.title, 'Remembered', 'the open tab has no title of its own');
     t.equal(await historyTitle(), 'Remembered', 'history still has the title');
 
     const h = await t.palettePage();
     t.equal(row(await ask(h, 'fli'), '/flip')?.title, 'Remembered', 'titled from history while History is on');
     await t.settings({ sources: { history: false } });
-    t.equal(row(await ask(h, 'flip'), '/flip')?.title, 'Example', 'titled by its site once History is off');
+    t.equal(row(await ask(h, 'flip'), '/flip')?.title, bare(url), 'titled by its URL once History is off');
   } finally {
     server.close();
   }
@@ -190,4 +183,50 @@ req('R606', 'In incognito, the history scope shows `History is not searched in i
   t.ok((await sent(false)).some((r) => r.kind === 'history' && r.url === seenUrl), 'a regular window lists history');
   const results = await sent(true);
   t.deepEqual(results, [{ kind: 'note', title: 'History is not searched in incognito', url: '' }]);
+});
+
+req('R609', 'Tabs and Pinned tabs step through On, When typed and Off; Bookmarks, History and Browser pages toggle On and Off.', async (t) => {
+  const v = await optionsPage(t);
+  await v.type('Search sources');
+  await v.waitRows((r) => r.some((x) => x.title === 'Search sources'), 'sources row');
+  await selectRow(v, 'Search sources');
+  await v.press('Enter');
+  await v.waitRows((r) => r.some((x) => x.title === 'Pinned tabs'), 'sources submenu');
+  const value = async (title) => (await v.rows()).find((r) => r.title === title)?.value;
+  const press = async (title, want) => {
+    await selectRow(v, title);
+    await v.press('Enter');
+    await v.waitRows((r) => r.find((x) => x.title === title)?.value === want, `${title}: ${want}`);
+    t.equal(await value(title), want);
+  };
+  for (const title of ['Tabs', 'Pinned tabs']) {
+    for (const want of ['When typed', 'Off', 'On']) await press(title, want);
+  }
+  for (const title of ['Bookmarks', 'History', 'Browser pages']) {
+    for (const want of ['Off', 'On']) await press(title, want);
+  }
+});
+
+req('R610', 'A tab source set to When typed is left out of the list shown with nothing typed, but its tabs are still found by typing and listed in the tabs scope.', async (t) => {
+  await t.open(t.server.url('/p/Alpha'));
+  await t.open(t.server.url('/p/Beta'), { pinned: true });
+  const empty = async (what) => (await (await t.palettePage()).waitRows((r) => r.length > 0, what)).map((r) => r.title);
+  const tab = (title) => (r) => r.title === title && r.badge === 'Switch to Tab';
+
+  for (const [source, title, other, text] of [['tabs', 'Alpha', 'Beta', 'alpha'], ['pinned', 'Beta', 'Alpha', 'beta']]) {
+    // Control: while On, the tab is listed with nothing typed.
+    await t.settings({ sources: {} });
+    t.includes(await empty(`${source} on`), title);
+
+    await t.settings({ sources: { [source]: 'typed' } });
+    const rows = await empty(`${source} when typed`);
+    t.includes(rows, other, `${source}: the other tab source is still listed`);
+    t.excludes(rows, title, `${source}: not listed with nothing typed`);
+
+    const v = await t.palettePage();
+    t.ok((await ask(v, text)).some(tab(title)), `${source}: typing its title finds it`);
+
+    const scoped = await (await t.palettePage('fallback&scope=tabs')).waitRows((r) => r.some((x) => x.title === title), `${source}: tabs scope`);
+    t.ok(scoped.some((r) => r.title === title), `${source}: listed in the tabs scope`);
+  }
 });

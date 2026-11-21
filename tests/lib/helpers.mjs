@@ -1,4 +1,5 @@
 // Small helpers shared by the sources, options and appearance cases.
+import { createServer } from 'node:http';
 import { View } from './harness.mjs';
 
 /** The options page (`options.html`) as a view, once its rows are listed. */
@@ -66,3 +67,21 @@ export const tabsAt = (t, url) => t.evalSw(async (u) => (await chrome.tabs.query
 
 /** The stored value of a chrome.storage.sync key. */
 export const stored = (t, key) => t.evalSw(async (k) => (await chrome.storage.sync.get(k))[k], key);
+
+/** Discards a background tab (as the browser does to save memory), returning it: its id may change. */
+export const discard = (t, tabId) => t.evalSw(async (id) => chrome.tabs.discard(id), tabId);
+
+/** A URL as the palette shows it: no scheme, `www.` or trailing slash. */
+export const bare = (url) => url.replace(/^(https?|ftp):\/\//, '').replace(/^www\./, '').replace(/\/$/, '');
+
+/** A server whose pages have a title the first time they are fetched, and none after. */
+export function titleOnce() {
+  const hits = new Map();
+  const server = createServer((request, res) => {
+    const n = (hits.get(request.url) ?? 0) + 1;
+    hits.set(request.url, n);
+    res.writeHead(200, { 'content-type': 'text/html' });
+    res.end(`<!doctype html><html><head>${n === 1 ? '<title>Remembered</title>' : ''}</head><body>x</body></html>`);
+  });
+  return new Promise((ok) => server.listen(0, '127.0.0.1', () => ok({ server, port: server.address().port })));
+}

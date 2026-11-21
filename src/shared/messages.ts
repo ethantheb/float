@@ -65,7 +65,7 @@ export type Message =
   // `replace` (editing the page's URL) leaves out open tabs
   | { type: 'query'; id: number; text: string; options?: boolean; menu?: string; replace?: boolean; scope?: ScopeKey }
   | { type: 'older'; id: number; text: string; exclude: string[] } // palette -> SW, answered with QueryResponse
-  | { type: 'open'; result: Result; where: Where } // palette -> SW
+  | { type: 'open'; result: Result; where: Where; tabId?: number } // palette -> SW; `tabId`: the tab the fallback page edits
   | { type: 'set'; key: string; step?: number; value?: string } // palette -> SW, answered once saved
   | { type: 'close' } // palette page -> SW, answered with whether the tab was closed
   // SW -> content script / palette page (answered with true). Carry the empty-query

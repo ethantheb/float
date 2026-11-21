@@ -79,7 +79,8 @@ export class Env {
       args: [
         `--load-extension=${DIST}`,
         `--disable-extensions-except=${DIST}`,
-        '--host-resolver-rules=MAP *.test 127.0.0.1',
+        // mail.google.com: a well-known site (see R323), kept off the network.
+        '--host-resolver-rules=MAP *.test 127.0.0.1, MAP mail.google.com 127.0.0.1',
         '--no-first-run',
         '--no-default-browser-check',
       ],

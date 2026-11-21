@@ -238,7 +238,7 @@ req('R512', 'The scope commands and the edit-URL command work on browser pages b
     await fallbackTab(url);
     t.includes(await tabUrls(), url, `search-${key} opens the fallback page`);
   }
-  const url = `${t.EXT}/palette.html?fallback&${new URLSearchParams({ edit: browserUrl })}`;
+  const url = `${t.EXT}/palette.html?fallback&${new URLSearchParams({ edit: browserUrl, tab: String(tab.id) })}`;
   await t.command('open-palette-url', tab.id);
   await fallbackTab(url);
   t.includes(await tabUrls(), url, `open-palette-url opens the fallback page`);

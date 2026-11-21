@@ -20,11 +20,13 @@ export interface Settings {
   theme: 'auto' | 'dark' | 'light';
   /** CSS color overrides. Empty values use the theme default. */
   colors: Partial<Record<ColorKey, string>>;
-  /** Which kinds of results appear. A source that isn't listed is on. */
-  sources: Partial<Record<SourceKey, boolean>>;
+  /** Which kinds of results appear. A source that isn't listed is on. 'typed' (tabs only): searched, but not listed while nothing is typed. */
+  sources: Partial<Record<SourceKey, boolean | 'typed'>>;
 }
 
 export const sourceOn = (s: Settings, key: SourceKey): boolean => s.sources?.[key] !== false;
+/** On, and also listed while nothing is typed (not 'typed'). */
+export const sourceListed = (s: Settings, key: SourceKey): boolean => sourceOn(s, key) && s.sources?.[key] !== 'typed';
 
 /** localStorage key mirroring settings, so extension pages apply the theme before first paint. */
 export const SETTINGS_CACHE = 'float-settings';

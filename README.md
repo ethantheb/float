@@ -22,9 +22,8 @@ In browsers that allow it, such as [Helium](https://github.com/imputnet/helium),
 Float isn't in the Chrome Web Store yet, so you install it as an unpacked extension.
 
 1. Download `float-vX.Y.Z.zip` from the [latest release](https://github.com/ethantheb/float/releases/latest).
-2. Optionally, [verify it](#verify-a-release).
-3. Extract it to a folder you'll keep. The browser loads the extension from that folder, so don't delete it.
-4. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and select the folder.
+2. Extract it to a folder you'll keep. The browser loads the extension from that folder, so don't delete it.
+3. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and select the folder.
 
 To update, download a new release, overwrite the old folder, and hit reload in chrome://extensions.
 

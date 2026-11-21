@@ -74,6 +74,7 @@ One behavior per row, in the form the user would see it. Status is exactly `auto
 | R322 | A loaded tab is titled as the browser titles it, even when that is just its URL or domain; only unloaded or discarded tabs get a fallback title. | auto |
 | R323 | An unloaded or discarded tab at a well-known site, with no title of its own or from history or bookmarks, is titled with the site's name, such as Gmail for mail.google.com. | auto |
 | R324 | A history page titled only with its site's name, such as `Example` or `(3) Example` on example.test, at a URL other than the homepage, is listed after the homepage and pages with real titles, even when visited more often. | auto |
+| R325 | Another browser's scheme for its pages, such as `helium://flags` or `brave://fl`, is read as `chrome://`: it lists that browser page above the search row, and Enter opens it. | auto |
 
 ## Bangs (R4xx)
 

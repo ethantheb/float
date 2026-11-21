@@ -417,3 +417,25 @@ req('R320', 'The Float options row shows only its title, with no secondary text.
   t.ok(options, 'Float options listed');
   t.equal(options.sub, '');
 });
+
+req('R325', "Another browser's scheme for its pages, such as `helium://flags` or `brave://fl`, is read as `chrome://`: it lists that browser page above the search row, and Enter opens it.", async (t) => {
+  const v = await t.palettePage();
+  // The opposite first: a scheme that isn't a browser's is searched for.
+  let rows = await ask(v, 'nosuch://flags');
+  t.equal(rows[0].sub, SEARCH_SUB);
+
+  rows = await ask(v, 'brave://fl', (r) => r.sub === 'Open');
+  t.match(rows[0].sub, /^chrome:\/\//);
+  t.ok(kindRow(rows, 'chrome://flags') >= 0, 'brave://fl lists chrome://flags');
+  t.equal(kindRow(rows, SEARCH_SUB), -1, 'no search row');
+
+  rows = await ask(v, 'helium://flags', (r) => r.sub === 'Open');
+  t.equal(rows[0].sub, 'chrome://flags');
+  t.equal(kindRow(rows, SEARCH_SUB), -1, 'no search row');
+
+  const flagsTabs = () => t.evalSw(async () => (await chrome.tabs.query({})).filter((x) => (x.url || x.pendingUrl || '').startsWith('chrome://flags')).length);
+  t.equal(await flagsTabs(), 0);
+  await v.press('Enter');
+  await t.waitFor(async () => (await flagsTabs()) === 1, { what: 'chrome://flags opened' });
+  t.ok(true, 'Enter opened chrome://flags');
+});

@@ -6,7 +6,7 @@ import { CHROME_PAGES } from './chromePages';
 import { favicon } from './favicons';
 import { getHistory, peekHistory, type HistoryEntry } from './history';
 import { knownSiteName } from './siteNames';
-import { displayUrl, hostOf, isOwnPage, toUrl } from './url';
+import { asChromeUrl, displayUrl, hostOf, isOwnPage, toUrl } from './url';
 
 const MAX_RESULTS = 8;
 const OPTIONS_KEY = 'float:options';
@@ -190,7 +190,8 @@ export async function searchOlder(text: string, exclude: string[], from: From, s
 
 /** `scope` narrows the search to one source: nothing else is searched, and there's no search or options row. */
 async function rank(text: string, settings: Settings, from: From, withTabs = true, scope?: ScopeKey): Promise<Omit<QueryResponse, 'id'>> {
-  const q = normalize(text);
+  // helium://fla matches chrome://flags (and tabs, which the browser reports as chrome://).
+  const q = asChromeUrl(normalize(text));
   // A shortcut can open a scope whose source is turned off: say so, instead of an empty list.
   // (Incognito never shows history, but a shortcut can still ask for it.)
   if (scope === 'history' && from?.incognito) return { results: [{ kind: 'note', title: 'History is not searched in incognito', sub: '', url: '' }] };

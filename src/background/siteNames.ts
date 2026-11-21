@@ -74,3 +74,24 @@ export function knownSiteName(url: string): string {
   for (let h = host; h.includes('.'); h = h.slice(h.indexOf('.') + 1)) if (Object.hasOwn(NAMES, h)) return NAMES[h];
   return '';
 }
+
+/**
+ * Whether a history title only names the site ("YouTube", "(3) YouTube") for a page other
+ * than its homepage. Sites that change pages without loading one often get visits saved
+ * with such a title, which says nothing about the page.
+ */
+export function namesOnlySite(title: string, url: string): boolean {
+  const t = title.replace(/^\(\d+\+?\)\s*/, '').trim().toLowerCase();
+  if (!t || t.length > 40) return false;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.pathname === '/' && !parsed.search) return false;
+  const host = parsed.hostname.replace(/^www\./, '');
+  const labels = host.split('.');
+  // youtube.com → "youtube"; also the host itself and a well-known name ("Gmail").
+  return t === host || t === labels[labels.length - 2] || t === knownSiteName(url).toLowerCase();
+}

@@ -47,7 +47,7 @@ function startServer() {
     };
     const [, kind, arg = ''] = url.pathname.split('/');
     if (kind === 'p') return html(`<title>${decodeURIComponent(arg)}</title>`);
-    if (kind === 'untitled') return html('');
+    if (kind === 'untitled' || url.pathname === '/') return html('');
     if (kind === 'keys') return html('<title>Keys</title>', '<script>window.keys=[];addEventListener("keydown",e=>keys.push(e.key),true);addEventListener("keypress",e=>keys.push(e.key),true)</script><input id=i>');
     if (kind === 'csp') {
       return html('<title>Strict</title>', '<p>strict page</p>', {

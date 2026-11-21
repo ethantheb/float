@@ -146,6 +146,29 @@ req('R323', "An unloaded or discarded tab at a well-known site, with no title of
   t.equal(titleOf(marked), 'Inbox (3)', 'a bookmark title comes first: the name is only a fallback');
 });
 
+req("R324", "A history page titled only with its site's name, such as `Example` or `(3) Example` on example.test, at a URL other than the homepage, is listed after the homepage and pages with real titles, even when visited more often.", async (t) => {
+  const page = (path, host) => t.server.url(path, host);
+  await visit(t, page('/p/Guide'), 'Example guide');
+  await visit(t, page('/'), 'Example');
+  await visit(t, page('/p/One?v=1'), 'Example');
+  await visit(t, page('/p/Two'), '(3) Example');
+  // Control: the same title on another site is a real title, and visited as often.
+  await visit(t, page('/p/Three', 'www.other.test'), 'Example');
+  for (const url of [page('/p/One?v=1'), page('/p/Two'), page('/p/Three', 'www.other.test')]) for (let i = 0; i < 5; i++) await addHistory(t, url);
+
+  const v = await t.palettePage();
+  const at = (rows, path, host) => rows.findIndex((r) => r.sub === bareUrl(page(path, host)));
+  const all = [['/p/Guide'], ['/'], ['/p/One?v=1'], ['/p/Two'], ['/p/Three', 'www.other.test']];
+  const rows = await askUntil(v, 'example', (r) => all.every(([p, h]) => at(r, p, h) >= 0));
+  const [guide, home, one, two, other] = all.map(([p, h]) => at(rows, p, h));
+  t.ok(guide >= 0 && home >= 0 && one >= 0 && two >= 0 && other >= 0, 'every page is listed');
+  t.ok(other < guide, 'control: a well-visited page titled Example on another site outranks the guide');
+  for (const [name, i] of [['Example', one], ['(3) Example', two]]) {
+    t.ok(i > guide, `${name} is listed after the page with a real title`);
+    t.ok(i > home, `${name} is listed after the homepage`);
+  }
+});
+
 req('R305', 'A pinned tab shows a pin icon over its favicon, and its badge still says "Switch to Tab".', async (t) => {
   await t.open(t.server.url('/p/Loose'));
   await t.open(t.server.url('/p/Fixed'), { pinned: true });

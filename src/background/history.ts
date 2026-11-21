@@ -1,3 +1,4 @@
+import { namesOnlySite } from './siteNames';
 import { displayUrl, isOwnPage } from './url';
 
 /** Hard cap on indexed URLs; the least recently visited are evicted first. */
@@ -13,6 +14,8 @@ export interface HistoryEntry {
   /** Lowercased title and display URL, precomputed for matching. */
   t: string;
   d: string;
+  /** The title only names the site, e.g. "YouTube" for a video: ranked low. */
+  generic: boolean;
 }
 
 /**
@@ -65,7 +68,7 @@ async function sync(): Promise<Map<string, HistoryEntry>> {
     const { url, title = '', visitCount = 0, typedCount = 0 } = items[i];
     if (!url || isOwnPage(url)) continue;
     map.delete(url);
-    map.set(url, { url, title, visits: visitCount, typed: typedCount, t: title.toLowerCase(), d: displayUrl(url).toLowerCase() });
+    map.set(url, { url, title, visits: visitCount, typed: typedCount, t: title.toLowerCase(), d: displayUrl(url).toLowerCase(), generic: namesOnlySite(title, url) });
   }
   while (map.size > MAX_HISTORY) map.delete(map.keys().next().value!);
 

@@ -275,9 +275,12 @@ async function rank(text: string, settings: Settings, from: From, withTabs = tru
   for (const b of bookmarks) add(b.url, b.t, b.d, 1.05, () => pageResult('bookmark', b.title, b.url));
 
   // A history title alone doesn't outrank a web search; a URL prefix does (like omnibox autocomplete).
+  // Pages titled only with their site's name ("YouTube") say nothing about the page: they go last.
   for (const h of history.values()) {
     const frecency = Math.min(0.15, Math.log2(1 + h.visits + 3 * h.typed) * 0.02);
-    add(h.url, h.t, h.d, 1, () => pageResult('history', h.title, h.url), { bonus: frecency, promotable: 'url' });
+    const make = () => pageResult('history', h.title, h.url);
+    if (h.generic) add(h.url, h.t, h.d, 0.5, make, { promotable: false });
+    else add(h.url, h.t, h.d, 1, make, { bonus: frecency, promotable: 'url' });
   }
 
   // The search or open row takes one slot, except in a scope.
